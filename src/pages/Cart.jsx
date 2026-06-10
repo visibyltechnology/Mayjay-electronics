@@ -24,7 +24,7 @@ function fmt(n) {
 export default function Cart() {
   const navigate = useNavigate();
   const { user, isAdmin } = useAuthStore();
-  const { items, _hydrated, removeFromCart, updateQuantity, getInitialPaymentTotal, clearCart } = useCartStore();
+  const { items, removeFromCart, updateQuantity, getInitialPaymentTotal, clearCart } = useCartStore();
 
   // RBAC: Redirect admins away from cart using the store's isAdmin flag
   useEffect(() => {
@@ -138,25 +138,12 @@ export default function Cart() {
   };
 
   const recalcPeriodPayment = (item, targetFreq, targetDur) => {
-    const INTEREST = { 2: 0, 3: 0.1, 4: 0.1, 5: 0.2, 6: 0.2 };
-    const rate = INTEREST[targetDur] ?? 0.2;
+    const INTEREST = { 2: 0.05, 3: 0.1, 4: 0.1, 5: 0.2, 6: 0.2 };
+    const baseRate = INTEREST[targetDur] ?? 0.2;
+    const rate = baseRate * (targetFreq === 'weekly' ? 0.5 : 1);
     const fullAmount = item.price * (1 + rate);
-    if (targetFreq === 'weekly') {
-      return fullAmount / (targetDur * 4);
-    }
     return fullAmount / targetDur;
   };
-
-  if (!_hydrated) {
-    return (
-      <main className="min-h-screen flex flex-col bg-gray-50">
-        <div className="flex-grow flex flex-col items-center justify-center text-gray-400">
-          <i className="fas fa-circle-notch fa-spin text-4xl mb-4 text-brandLime"></i>
-          <h2 className="text-xl font-bold font-display uppercase tracking-widest text-gray-500">Loading Cart...</h2>
-        </div>
-      </main>
-    );
-  }
 
   const totalToPayNow = getInitialPaymentTotal();
 
@@ -202,13 +189,10 @@ export default function Cart() {
         item.price = dbProduct.price;
         if (item.paymentChoice === 'installment') {
            const INTEREST = { 2: 0.05, 3: 0.1, 4: 0.1, 5: 0.2, 6: 0.2 };
-           const rate = INTEREST[item.installments] ?? 0.2;
+           const baseRate = INTEREST[item.installments] ?? 0.2;
+           const rate = baseRate * (item.paymentFrequency === 'weekly' ? 0.5 : 1);
            const fullAmount = dbProduct.price * (1 + rate);
-           if (item.paymentFrequency === 'weekly') {
-             item.periodPayment = fullAmount / (item.installments * 4);
-           } else {
-             item.periodPayment = fullAmount / item.installments;
-           }
+           item.periodPayment = fullAmount / item.installments;
         }
       }
 

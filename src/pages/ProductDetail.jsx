@@ -9,7 +9,7 @@ import useAuthStore from '../store/useAuthStore';
 import toast from 'react-hot-toast';
 import { collection, addDoc, onSnapshot, serverTimestamp, query, orderBy } from 'firebase/firestore';
 
-const INTEREST = { 2: 0, 3: 10, 4: 10, 5: 20, 6: 20 };
+const INTEREST = { 2: 5, 3: 10, 4: 10, 5: 20, 6: 20 };
 
 function fmt(n) {
   return '₦' + Math.ceil(n).toLocaleString('en-NG');
@@ -93,12 +93,13 @@ export default function ProductDetail() {
     );
   }
 
-  // Installment calculations
   const price = Number(product.price);
-  const rate        = INTEREST[installments] / 100;
+  const monthlyRate = INTEREST[installments] / 100;
+  const rate        = monthlyRate * (paymentFrequency === 'weekly' ? 0.5 : 1);
+  const displayRate = INTEREST[installments] * (paymentFrequency === 'weekly' ? 0.5 : 1);
   const total       = price * (1 + rate);
   
-  const totalPeriods = paymentFrequency === 'weekly' ? installments * 4 : installments;
+  const totalPeriods = installments;
   const periodPayment = total / totalPeriods;
   const interestAmt = total - price;
 
@@ -273,8 +274,11 @@ export default function ProductDetail() {
                   <div className="bg-brandDark border border-gray-800 rounded-xl p-6 mb-6 shadow-inner">
                     <div className="flex justify-between items-center mb-4 pb-4 border-b border-gray-700">
                       <span className="text-xs font-bold uppercase tracking-widest text-gray-400">Interest rate</span>
-                      <span className={`text-xs font-black uppercase tracking-widest ${INTEREST[installments] > 0 ? 'text-white' : 'text-brandLime'}`}>
-                        {INTEREST[installments]}% {INTEREST[installments] === 0 && '🎉'}
+                      <span className={`text-xs font-black uppercase tracking-widest ${displayRate > 0 ? 'text-white' : 'text-brandLime'}`}>
+                        {displayRate}% {displayRate === 0 && '🎉'}
+                        {paymentFrequency === 'weekly' && INTEREST[installments] > 0 && (
+                          <span className="ml-1 text-brandLime font-bold text-[10px]">(½ of monthly)</span>
+                        )}
                       </span>
                     </div>
                     {interestAmt > 0 && (

@@ -67,13 +67,11 @@ const useCartStore = create(
           items: state.items.map((item) => {
             if (item.paymentChoice !== 'installment') return item;
             if (item.paymentFrequency === newFrequency) return item;
-
-            let newPeriodPayment = item.periodPayment || item.monthlyPayment || 0;
-            if (newFrequency === 'weekly' && item.paymentFrequency === 'monthly') {
-              newPeriodPayment = newPeriodPayment / 4;
-            } else if (newFrequency === 'monthly' && item.paymentFrequency === 'weekly') {
-              newPeriodPayment = newPeriodPayment * 4;
-            }
+            const INTEREST = { 2: 0.05, 3: 0.1, 4: 0.1, 5: 0.2, 6: 0.2 };
+            const baseRate = INTEREST[item.installments] ?? 0.2;
+            const rate = baseRate * (newFrequency === 'weekly' ? 0.5 : 1);
+            const fullAmount = item.price * (1 + rate);
+            const newPeriodPayment = fullAmount / item.installments;
 
             return { ...item, paymentFrequency: newFrequency, periodPayment: newPeriodPayment };
           })
@@ -81,12 +79,13 @@ const useCartStore = create(
       },
 
       getCartTotal: () => {
-        const INTEREST = { 2: 0, 3: 10, 4: 10, 5: 20, 6: 20 };
+        const INTEREST = { 2: 5, 3: 10, 4: 10, 5: 20, 6: 20 };
         return get().items.reduce((total, item) => {
           if (item.paymentChoice === 'full') {
             return total + (item.price * item.quantity);
           }
-          const rate = (INTEREST[item.installments] || 0) / 100;
+          const baseRate = (INTEREST[item.installments] || 0) / 100;
+          const rate = baseRate * (item.paymentFrequency === 'weekly' ? 0.5 : 1);
           return total + (item.price * (1 + rate) * item.quantity);
         }, 0);
       },

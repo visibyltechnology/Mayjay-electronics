@@ -29,6 +29,7 @@ const CategoryManager  = lazy(() => import('./pages/Admin/CategoryManager'));
 const BrandManager     = lazy(() => import('./pages/Admin/BrandManager'));
 const ProductForm      = lazy(() => import('./pages/Admin/ProductForm'));
 const AdminOrders      = lazy(() => import('./pages/Admin/AdminOrders'));
+const AdminUsers       = lazy(() => import('./pages/Admin/AdminUsers'));
 const SiteSettings     = lazy(() => import('./pages/Admin/SiteSettings'));
 
 /* ─── Page-level Suspense mini-loader ─── */
@@ -246,6 +247,7 @@ function App() {
             <Route path="new"         element={<ProductForm />} />
             <Route path="edit/:id"    element={<ProductForm />} />
             <Route path="orders"      element={<AdminOrders />} />
+            <Route path="users"       element={<AdminUsers />} />
             <Route path="settings"    element={<SiteSettings />} />
           </Route>
         </Routes>

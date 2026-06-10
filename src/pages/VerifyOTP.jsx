@@ -291,7 +291,7 @@ export default function VerifyOTP() {
               )}
 
               <form onSubmit={verifyOTP}>
-                <div className="flex justify-center gap-3 mb-8">
+                <div className="flex justify-center gap-2 sm:gap-3 mb-8">
                   {otp.map((data, index) => (
                     <input
                       key={index}
@@ -301,7 +301,7 @@ export default function VerifyOTP() {
                       onChange={(e) => handleChange(e.target, index)}
                       onKeyDown={(e) => handleKeyDown(e, index)}
                       onFocus={(e) => e.target.select()}
-                      className="w-12 h-14 text-2xl text-center border-2 border-gray-200 focus:border-brandLime outline-none rounded-lg font-black bg-gray-50 focus:bg-white text-brandDark transition-all shadow-sm"
+                      className="w-10 h-12 sm:w-12 sm:h-14 text-xl sm:text-2xl text-center border-2 border-gray-200 focus:border-brandLime outline-none rounded-lg font-black bg-gray-50 focus:bg-white text-brandDark transition-all shadow-sm"
                     />
                   ))}
                 </div>

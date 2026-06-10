@@ -81,7 +81,9 @@ export const DEFAULT_CATEGORIES = [
   { name: 'Phones', order: 6 },
   { name: 'Laptops', order: 7 },
   { name: 'Audio', order: 8 },
-  { name: 'Gaming', order: 9 }
+  { name: 'Gaming', order: 9 },
+  { name: 'Solar', order: 10 },
+  { name: 'Inverters', order: 11 }
 ];
 
 // Category color mapping for UI
@@ -95,6 +97,8 @@ export const CATEGORY_STYLES = {
   'Laptops': { bg: '#f3e8ff', text: '#a855f7', border: '#e9d5ff', dot: '#a855f7', glow: 'rgba(168,85,247,0.15)' },
   'Audio': { bg: '#ffe2e6', text: '#f43f5e', border: '#ffbdc7', dot: '#f43f5e', glow: 'rgba(244,63,94,0.15)' },
   'Gaming': { bg: '#fff7ed', text: '#fb923c', border: '#fed7aa', dot: '#fb923c', glow: 'rgba(251,146,60,0.15)' },
+  'Solar': { bg: '#fffbeb', text: '#eab308', border: '#fef08a', dot: '#eab308', glow: 'rgba(234,179,8,0.15)' },
+  'Inverters': { bg: '#eff6ff', text: '#0284c7', border: '#bae6fd', dot: '#0284c7', glow: 'rgba(2,132,199,0.15)' },
   'All': { bg: '#f3f4f6', text: '#374151', border: '#e5e7eb', dot: '#6b7280', glow: 'rgba(0,0,0,0.08)' },
 };
 

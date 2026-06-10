@@ -4,7 +4,8 @@ import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { auth, db } from '../firebase';
 import { doc, setDoc } from 'firebase/firestore';
 import Footer from '../components/Footer';
-import { Eye, EyeOff, CheckCircle, UserPlus } from 'lucide-react';
+import LegalModal from '../components/LegalModal';
+import { Eye, EyeOff, CheckCircle, UserPlus, Lock } from 'lucide-react';
 import { sendRegistrationOTPEmail } from '../utils/email';
 import toast from 'react-hot-toast';
 
@@ -24,6 +25,11 @@ export default function Register() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
+  // Legal terms state
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
+  const [agreedToPrivacy, setAgreedToPrivacy] = useState(false);
+  const [activeLegal, setActiveLegal] = useState(null); // 'terms' | 'privacy' | null
+
   const handleChange = (e) => {
     setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
   };
@@ -36,6 +42,12 @@ export default function Register() {
     if (formData.password !== formData.confirmPassword) {
       setError('Passwords do not match');
       toast.error('Passwords do not match');
+      return;
+    }
+
+    if (!agreedToTerms || !agreedToPrivacy) {
+      setError('You must read and accept both the Terms of Service and Privacy Policy to continue.');
+      toast.error('Please accept all terms and conditions.');
       return;
     }
 
@@ -237,10 +249,66 @@ export default function Register() {
                     )}
                   </div>
 
-                  {/* Terms note */}
-                  <p className="text-xs text-gray-500 font-medium">
-                    By registering, you agree to our <a href="#" className="text-brandGreen hover:underline">Terms of Service</a> and <a href="#" className="text-brandGreen hover:underline">Privacy Policy</a>.
-                  </p>
+                  {/* Terms Checkboxes */}
+                  <div className="space-y-3 pt-2">
+                      {/* Terms checkbox */}
+                      <div 
+                        onClick={() => !agreedToTerms && setActiveLegal('terms')}
+                        className={`flex items-start gap-3 p-4 rounded-xl border-2 transition-all cursor-pointer ${
+                          agreedToTerms 
+                            ? 'border-brandLime bg-brandLime/10' 
+                            : 'border-gray-200 bg-gray-50 hover:border-brandLime/50'
+                        }`}
+                      >
+                        <div className="flex-shrink-0 mt-0.5">
+                          <div className={`w-5 h-5 rounded flex items-center justify-center transition-all ${
+                            agreedToTerms ? 'bg-brandLime text-brandBlack' : 'border-2 border-gray-300 bg-white'
+                          }`}>
+                            {agreedToTerms && <i className="fas fa-check text-[10px]"></i>}
+                          </div>
+                        </div>
+                        <div className="flex-1">
+                          <p className={`text-xs font-bold ${agreedToTerms ? 'text-brandBlack' : 'text-gray-700'}`}>
+                            I have read and agree to the <button type="button" onClick={(e) => { e.stopPropagation(); setActiveLegal('terms'); }} className="text-brandLime hover:underline underline-offset-2">Terms of Service</button>
+                          </p>
+                          {!agreedToTerms && (
+                            <p className="text-[10px] text-gray-500 mt-1 uppercase tracking-wider font-bold"><i className="fas fa-lock mr-1"></i>Click to read & accept</p>
+                          )}
+                          {agreedToTerms && (
+                            <p className="text-[10px] text-brandGreen mt-1 uppercase tracking-wider font-bold"><i className="fas fa-check-circle mr-1"></i>Accepted</p>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Privacy checkbox */}
+                      <div 
+                        onClick={() => !agreedToPrivacy && setActiveLegal('privacy')}
+                        className={`flex items-start gap-3 p-4 rounded-xl border-2 transition-all cursor-pointer ${
+                          agreedToPrivacy 
+                            ? 'border-brandLime bg-brandLime/10' 
+                            : 'border-gray-200 bg-gray-50 hover:border-brandLime/50'
+                        }`}
+                      >
+                        <div className="flex-shrink-0 mt-0.5">
+                          <div className={`w-5 h-5 rounded flex items-center justify-center transition-all ${
+                            agreedToPrivacy ? 'bg-brandLime text-brandBlack' : 'border-2 border-gray-300 bg-white'
+                          }`}>
+                            {agreedToPrivacy && <i className="fas fa-check text-[10px]"></i>}
+                          </div>
+                        </div>
+                        <div className="flex-1">
+                          <p className={`text-xs font-bold ${agreedToPrivacy ? 'text-brandBlack' : 'text-gray-700'}`}>
+                            I have read and agree to the <button type="button" onClick={(e) => { e.stopPropagation(); setActiveLegal('privacy'); }} className="text-brandLime hover:underline underline-offset-2">Privacy Policy</button>
+                          </p>
+                          {!agreedToPrivacy && (
+                            <p className="text-[10px] text-gray-500 mt-1 uppercase tracking-wider font-bold"><i className="fas fa-lock mr-1"></i>Click to read & accept</p>
+                          )}
+                          {agreedToPrivacy && (
+                            <p className="text-[10px] text-brandGreen mt-1 uppercase tracking-wider font-bold"><i className="fas fa-check-circle mr-1"></i>Accepted</p>
+                          )}
+                        </div>
+                      </div>
+                  </div>
 
                   {/* Submit */}
                   <button
@@ -277,6 +345,18 @@ export default function Register() {
       </div>
 
       <Footer />
+
+      {/* Legal Modal */}
+      {activeLegal && (
+        <LegalModal
+          type={activeLegal}
+          onClose={() => setActiveLegal(null)}
+          onAccept={(type) => {
+            if (type === 'terms') setAgreedToTerms(true);
+            if (type === 'privacy') setAgreedToPrivacy(true);
+          }}
+        />
+      )}
     </main>
   );
 }

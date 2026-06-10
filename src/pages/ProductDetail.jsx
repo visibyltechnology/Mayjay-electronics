@@ -5,6 +5,9 @@ import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import Footer from '../components/Footer';
 import useCartStore from '../store/useCartStore';
+import useAuthStore from '../store/useAuthStore';
+import toast from 'react-hot-toast';
+import { collection, addDoc, onSnapshot, serverTimestamp, query, orderBy } from 'firebase/firestore';
 
 const INTEREST = { 2: 0, 3: 10, 4: 10, 5: 20, 6: 20 };
 
@@ -25,6 +28,12 @@ export default function ProductDetail() {
   const [installments, setInstallments] = useState(2);
   const [paymentFrequency, setPaymentFrequency] = useState('monthly');
 
+  const { user } = useAuthStore();
+  const [reviews, setReviews] = useState([]);
+  const [newReviewText, setNewReviewText] = useState('');
+  const [newRating, setNewRating] = useState(5);
+  const [isSubmittingReview, setIsSubmittingReview] = useState(false);
+
   useEffect(() => {
     const fetchProduct = async () => {
       setLoading(true);
@@ -44,6 +53,19 @@ export default function ProductDetail() {
       }
     };
     fetchProduct();
+  }, [id]);
+
+  useEffect(() => {
+    if (!id) return;
+    const q = query(collection(db, 'products', id, 'reviews'), orderBy('createdAt', 'desc'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const fetchedReviews = [];
+      snapshot.forEach((doc) => {
+        fetchedReviews.push({ id: doc.id, ...doc.data() });
+      });
+      setReviews(fetchedReviews);
+    });
+    return () => unsubscribe();
   }, [id]);
 
   if (loading) {
@@ -90,6 +112,38 @@ export default function ProductDetail() {
     navigate('/cart');
   };
 
+  const submitReview = async (e) => {
+    e.preventDefault();
+    if (!user) {
+      toast.error('You must be logged in to leave a review.');
+      return;
+    }
+    if (!newReviewText.trim()) {
+      toast.error('Review text cannot be empty.');
+      return;
+    }
+    setIsSubmittingReview(true);
+    try {
+      await addDoc(collection(db, 'products', id, 'reviews'), {
+        userId: user.uid,
+        userName: user.displayName || user.email?.split('@')[0] || 'Anonymous',
+        rating: newRating,
+        text: newReviewText.trim(),
+        createdAt: serverTimestamp(),
+      });
+      toast.success('Review submitted successfully!');
+      setNewReviewText('');
+      setNewRating(5);
+    } catch (err) {
+      console.error('Error submitting review:', err);
+      toast.error('Failed to submit review. Please try again.');
+    } finally {
+      setIsSubmittingReview(false);
+    }
+  };
+
+  const averageRating = reviews.length > 0 ? (reviews.reduce((acc, r) => acc + r.rating, 0) / reviews.length).toFixed(1) : 0;
+
   return (
     <main className="min-h-screen flex flex-col bg-white">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full flex-grow">
@@ -120,7 +174,20 @@ export default function ProductDetail() {
           <div className="w-full lg:w-1/2 py-2">
             <div className="mb-6">
               <p className="text-[10px] font-black text-brandLime uppercase tracking-widest mb-3 bg-brandLime/10 inline-block px-3 py-1 rounded-full border border-brandLime/20">{product.brand || product.category || 'MAYJAY'}</p>
-              <h1 className="text-4xl md:text-5xl font-black text-brandDark leading-tight mb-4 tracking-tight uppercase">{product.name}</h1>
+              <h1 className="text-4xl md:text-5xl font-black text-brandDark leading-tight mb-2 tracking-tight uppercase">{product.name}</h1>
+              
+              {/* Rating Summary */}
+              {reviews.length > 0 && (
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="flex items-center text-yellow-400">
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <i key={star} className={`fas fa-star ${star <= Math.round(averageRating) ? 'text-yellow-400' : 'text-gray-200'} text-sm`}></i>
+                    ))}
+                  </div>
+                  <span className="text-sm font-bold text-gray-700">{averageRating}</span>
+                  <span className="text-xs font-bold text-gray-400">({reviews.length} reviews)</span>
+                </div>
+              )}
               {product.length && (
                 <span className="inline-block bg-brandDark text-brandLime text-[11px] font-bold px-3 py-1.5 rounded-md uppercase tracking-wider mb-4 shadow-md">
                   {product.length}
@@ -245,6 +312,105 @@ export default function ProductDetail() {
 
           </div>
         </div>
+
+        {/* REVIEWS SECTION */}
+        <div className="mt-16 border-t border-gray-100 pt-12">
+          <h2 className="text-2xl font-black text-brandDark uppercase tracking-tight mb-8">Customer Reviews</h2>
+          
+          <div className="flex flex-col lg:flex-row gap-12">
+            {/* Reviews List */}
+            <div className="w-full lg:w-2/3">
+              {reviews.length === 0 ? (
+                <div className="bg-gray-50 border border-gray-100 rounded-2xl p-8 text-center">
+                  <p className="text-gray-500 font-medium">No reviews yet. Be the first to share your experience!</p>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  {reviews.map((review) => (
+                    <div key={review.id} className="bg-white border border-gray-100 shadow-sm rounded-2xl p-6">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-full bg-brandDark text-brandLime flex items-center justify-center font-black text-sm uppercase shadow-inner">
+                            {review.userName?.charAt(0) || 'U'}
+                          </div>
+                          <div>
+                            <p className="font-bold text-brandDark text-sm">{review.userName || 'Anonymous'}</p>
+                            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">
+                              {review.createdAt ? new Date(review.createdAt.toDate()).toLocaleDateString() : 'Just now'}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex text-yellow-400 text-xs">
+                          {[1, 2, 3, 4, 5].map((star) => (
+                            <i key={star} className={`fas fa-star ${star <= review.rating ? 'text-yellow-400' : 'text-gray-200'}`}></i>
+                          ))}
+                        </div>
+                      </div>
+                      <p className="text-gray-600 text-sm leading-relaxed">{review.text}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Leave a Review Form */}
+            <div className="w-full lg:w-1/3">
+              <div className="bg-brandBlack border border-gray-800 rounded-2xl p-6 shadow-2xl sticky top-28">
+                <h3 className="text-lg font-black text-white uppercase tracking-tight mb-4">Write a Review</h3>
+                
+                {!user ? (
+                  <div className="bg-brandDark/50 border border-gray-800 rounded-xl p-6 text-center">
+                    <p className="text-gray-400 text-sm mb-4">Please sign in to share your thoughts about this product.</p>
+                    <Link to="/login" className="inline-block bg-brandLime text-brandBlack font-black px-6 py-3 rounded-lg text-xs uppercase tracking-widest hover:bg-white transition-colors">Sign In</Link>
+                  </div>
+                ) : (
+                  <form onSubmit={submitReview} className="flex flex-col gap-4">
+                    <div>
+                      <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Your Rating</label>
+                      <div className="flex gap-1">
+                        {[1, 2, 3, 4, 5].map((star) => (
+                          <button
+                            key={star}
+                            type="button"
+                            onClick={() => setNewRating(star)}
+                            className={`text-xl transition-transform hover:scale-110 focus:outline-none ${star <= newRating ? 'text-brandLime' : 'text-gray-600'}`}
+                          >
+                            <i className="fas fa-star"></i>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Your Comment</label>
+                      <textarea
+                        value={newReviewText}
+                        onChange={(e) => setNewReviewText(e.target.value)}
+                        placeholder="What did you like or dislike?"
+                        rows="4"
+                        className="w-full bg-brandDark border border-gray-700 rounded-xl p-3 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-brandLime focus:ring-1 focus:ring-brandLime transition-all resize-none"
+                        required
+                      ></textarea>
+                    </div>
+                    
+                    <button
+                      type="submit"
+                      disabled={isSubmittingReview}
+                      className="w-full bg-brandLime hover:bg-white text-brandBlack font-black py-3 rounded-xl text-xs uppercase tracking-widest transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center gap-2"
+                    >
+                      {isSubmittingReview ? (
+                        <><i className="fas fa-circle-notch fa-spin"></i> Submitting...</>
+                      ) : (
+                        'Post Review'
+                      )}
+                    </button>
+                  </form>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
       </div>
       <Footer />
     </main>

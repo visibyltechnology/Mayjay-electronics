@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Trash2, ArrowLeft, CreditCard, ShoppingBag } from 'lucide-react';
-import { collection, addDoc } from 'firebase/firestore';
+import { Trash2, ArrowLeft, ShoppingBag } from 'lucide-react';
+import { collection, addDoc, doc, getDoc, updateDoc, setDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import useCartStore from '../store/useCartStore';
 import useAuthStore from '../store/useAuthStore';
 import Footer from '../components/Footer';
 import toast from 'react-hot-toast';
+import { nigeriaData } from '../data/locations';
+import { getDeliveryDetails } from '../utils/deliveryPricing';
 
 import { initializeOrderTracking } from '../utils/orderTrackingService';
 import { decreaseInventory } from '../utils/inventoryService';
@@ -38,14 +40,46 @@ export default function Cart() {
     address: '',
     city: '',
     state: '',
+    landmark: '',
     phone: '',
     instructions: ''
   });
+
+  const [profileData, setProfileData] = useState(null);
+  const [savedAddresses, setSavedAddresses] = useState([]);
+  const [selectedAddressIndex, setSelectedAddressIndex] = useState(-1);
+  const [saveNewAddress, setSaveNewAddress] = useState(false);
+
   const [showPreview, setShowPreview] = useState(false);
   const [conflictDismissed, setConflictDismissed] = useState(false);
   const [splitMode, setSplitMode] = useState(false);
   const [expandedItems, setExpandedItems] = useState([]);
   const [itemGroups, setItemGroups] = useState({});
+
+  // Fetch user profile & saved addresses
+  useEffect(() => {
+    const fetchUserData = async () => {
+      if (!user) return;
+      try {
+        const docRef = doc(db, 'users', user.uid);
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          setProfileData(data);
+          if (data.savedAddresses && data.savedAddresses.length > 0) {
+            setSavedAddresses(data.savedAddresses);
+            setSelectedAddressIndex(0);
+            setDeliveryInfo({ ...data.savedAddresses[0], instructions: '' });
+          } else if (data.phone) {
+            setDeliveryInfo(prev => ({ ...prev, phone: data.phone }));
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching user data:', err);
+      }
+    };
+    fetchUserData();
+  }, [user]);
 
   const getPaymentSignature = (item) => {
     if (item.paymentChoice === 'full') return 'full';
@@ -126,6 +160,18 @@ export default function Cart() {
 
   const totalToPayNow = getInitialPaymentTotal();
 
+  const loadKorapayScript = () => new Promise((resolve, reject) => {
+    if (window.Korapay) { resolve(); return; }
+    const existing = document.querySelector('script[data-korapay]');
+    if (existing) existing.remove();
+    const s = document.createElement('script');
+    s.src = 'https://korablobstorage.blob.core.windows.net/modal-bucket/korapay-collections.min.js';
+    s.setAttribute('data-korapay', 'true');
+    s.onload = () => resolve();
+    s.onerror = () => { s.remove(); reject(new Error('Korapay script failed to load')); };
+    document.head.appendChild(s);
+  });
+
   const handleCheckout = async () => {
     if (!user || !user.uid) {
       setError('User session expired. Please log in again.');
@@ -133,7 +179,6 @@ export default function Cart() {
     }
 
     if (items.length === 0) return;
-    
     if (window.paymentProcessed) return;
     window.paymentProcessed = true;
 
@@ -141,10 +186,6 @@ export default function Cart() {
     setError('');
 
     try {
-      if (!/^\+234[0-9]{10}$/.test(deliveryInfo.phone)) {
-        throw new Error('Phone number must be in E.164 format (e.g. +2348000000000)');
-      }
-
       const itemsToValidate = splitMode ? expandedItems : items;
       for (const item of itemsToValidate) {
         if (!item.quantity || item.quantity < 1 || !Number.isInteger(item.quantity)) {
@@ -160,8 +201,8 @@ export default function Cart() {
         
         item.price = dbProduct.price;
         if (item.paymentChoice === 'installment') {
-           const INTEREST = { 2: 0, 3: 0.1, 4: 0.1, 5: 0.2, 6: 0.2 };
-           const rate = INTEREST[item.installments] || 0.2;
+           const INTEREST = { 2: 0.05, 3: 0.1, 4: 0.1, 5: 0.2, 6: 0.2 };
+           const rate = INTEREST[item.installments] ?? 0.2;
            const fullAmount = dbProduct.price * (1 + rate);
            if (item.paymentFrequency === 'weekly') {
              item.periodPayment = fullAmount / (item.installments * 4);
@@ -172,22 +213,55 @@ export default function Cart() {
       }
 
       const koraKey = import.meta.env.VITE_KORA_PUBLIC_KEY;
-      if (!koraKey || !window.Korapay) {
-        toast.error("Payment gateway is not configured properly.");
+      if (!koraKey) {
+        toast.error('Payment key is missing. Please contact support.');
         setLoading(false);
+        window.paymentProcessed = false;
         return;
       }
 
+      try {
+        await loadKorapayScript();
+      } catch {
+        toast.error('Could not load payment gateway. Check your connection and try again.');
+        setLoading(false);
+        window.paymentProcessed = false;
+        return;
+      }
+
+      if (!window.Korapay) {
+        toast.error('Payment gateway failed to initialise. Please refresh and try again.');
+        setLoading(false);
+        window.paymentProcessed = false;
+        return;
+      }
+
+      const deliveryDetails = deliveryInfo.state ? getDeliveryDetails(deliveryInfo.state) : { price: 0 };
+      let paymentAmount = Math.ceil(totalToPayNow + deliveryDetails.price);
+      const MINIMUM_PAYMENT = 1000;
+      if (paymentAmount < MINIMUM_PAYMENT && paymentAmount > 0) paymentAmount = MINIMUM_PAYMENT;
+
+      const paymentRef = `MAYJAY_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+      let paymentProcessed = false;
+      const safetyTimer = setTimeout(() => {
+        if (!paymentProcessed) { setLoading(false); window.paymentProcessed = false; }
+      }, 90000);
+
       window.Korapay.initialize({
         key: koraKey,
-        reference: `MAYJAY_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
-        amount: totalToPayNow,
+        reference: paymentRef,
+        amount: paymentAmount,
         currency: "NGN",
+        metadata: { orderId: paymentRef, itemCount: items.length, source: 'web' },
         customer: {
             name: user.displayName || user.email.split('@')[0],
             email: user.email
         },
         onSuccess: async function(response) {
+            if (paymentProcessed) return;
+            paymentProcessed = true;
+            clearTimeout(safetyTimer);
+            setLoading(true);
             toast.success("Verifying payment...");
             try {
               const verifyRes = await fetch('/api/verify-payment', {
@@ -210,6 +284,7 @@ export default function Cart() {
             try {
               if (splitMode) {
                 const groups = buildGroupMap(expandedItems);
+                const deliveryDetails2 = deliveryInfo.state ? getDeliveryDetails(deliveryInfo.state) : { price: 0 };
                 for (const [gId, groupUnits] of Object.entries(groups)) {
                   if (groupUnits.length === 0) continue;
                   const merged = {};
@@ -218,8 +293,9 @@ export default function Cart() {
                     merged[unit.cartItemId].quantity += 1;
                   });
                   const groupItems = Object.values(merged);
-                  const groupTotalAmount = groupItems.reduce((acc, i) => acc + (i.paymentChoice === 'full' ? i.price * i.quantity : (i.price * (1 + (i.installments === 3 || i.installments === 4 ? 0.1 : i.installments > 4 ? 0.2 : 0))) * i.quantity), 0);
-                  const groupTotalToPayNow = groupItems.reduce((acc, i) => acc + (i.paymentChoice === 'full' ? i.price * i.quantity : (i.periodPayment || i.monthlyPayment || 0) * i.quantity), 0);
+                  const INTEREST = { 2: 0.05, 3: 0.1, 4: 0.1, 5: 0.2, 6: 0.2 };
+                  const groupTotalAmount = groupItems.reduce((acc, i) => acc + (i.paymentChoice === 'full' ? i.price * i.quantity : (i.price * (1 + (INTEREST[i.installments] ?? 0.2))) * i.quantity), 0) + deliveryDetails2.price;
+                  const groupTotalToPayNow = groupItems.reduce((acc, i) => acc + (i.paymentChoice === 'full' ? i.price * i.quantity : (i.periodPayment || 0) * i.quantity), 0) + deliveryDetails2.price;
 
                   for (const item of groupItems) {
                     try {
@@ -233,6 +309,7 @@ export default function Cart() {
                     userId: user.uid,
                     items: groupItems,
                     deliveryInfo: deliveryInfo,
+                    deliveryFee: deliveryDetails2.price,
                     totalAmount: groupTotalAmount,
                     amountPaid: groupTotalToPayNow,
                     status: 'Processing',
@@ -242,12 +319,18 @@ export default function Cart() {
                   
                   try {
                     await createOrderPlacedNotification(user.uid, orderRef.id, groupItems.length);
-                    await createPaymentSuccessNotification(user.uid, orderRef.id, groupTotalToPayNow);
+                    const payFreq = groupItems.find(i => i.paymentFrequency)?.paymentFrequency;
+                    await createPaymentSuccessNotification(user.uid, orderRef.id, groupTotalToPayNow, {
+                      itemCount: groupItems.length,
+                      remainingBalance: groupTotalAmount - groupTotalToPayNow,
+                      paymentFrequency: payFreq
+                    });
                   } catch (notifErr) {
                     console.error('Error creating notifications:', notifErr);
                   }
                 }
               } else {
+                const deliveryDetails3 = deliveryInfo.state ? getDeliveryDetails(deliveryInfo.state) : { price: 0 };
                 for (const item of items) {
                   try {
                     await decreaseInventory(item.id, Number(item.quantity));
@@ -256,13 +339,15 @@ export default function Cart() {
                   }
                 }
 
-                const orderTotalAmount = items.reduce((acc, i) => acc + (i.paymentChoice === 'full' ? i.price * i.quantity : (i.price * (1 + (i.installments === 3 || i.installments === 4 ? 0.1 : i.installments > 4 ? 0.2 : 0))) * i.quantity), 0);
+                const INTEREST2 = { 2: 0.05, 3: 0.1, 4: 0.1, 5: 0.2, 6: 0.2 };
+                const orderTotalAmount = items.reduce((acc, i) => acc + (i.paymentChoice === 'full' ? i.price * i.quantity : (i.price * (1 + (INTEREST2[i.installments] ?? 0.2))) * i.quantity), 0) + deliveryDetails3.price;
                 const orderRef = await addDoc(collection(db, "orders"), initializeOrderTracking({
                   userId: user.uid,
                   items: items,
                   deliveryInfo: deliveryInfo,
+                  deliveryFee: deliveryDetails3.price,
                   totalAmount: orderTotalAmount,
-                  amountPaid: items.reduce((acc, i) => acc + (i.paymentChoice === 'full' ? i.price * i.quantity : (i.periodPayment || 0) * i.quantity), 0),
+                  amountPaid: totalToPayNow + deliveryDetails3.price,
                   status: 'Processing',
                   paymentRef: response.reference || `REF_${Date.now()}`,
                   createdAt: new Date(),
@@ -270,7 +355,12 @@ export default function Cart() {
                 
                 try {
                   await createOrderPlacedNotification(user.uid, orderRef.id, items.length);
-                  await createPaymentSuccessNotification(user.uid, orderRef.id, items.reduce((acc, i) => acc + (i.paymentChoice === 'full' ? i.price * i.quantity : (i.periodPayment || 0) * i.quantity), 0));
+                  const payFreq2 = items.find(i => i.paymentFrequency)?.paymentFrequency;
+                  await createPaymentSuccessNotification(user.uid, orderRef.id, totalToPayNow + deliveryDetails3.price, {
+                    itemCount: items.length,
+                    remainingBalance: orderTotalAmount - (totalToPayNow + deliveryDetails3.price),
+                    paymentFrequency: payFreq2
+                  });
                 } catch (notifErr) {
                   console.error('Error creating notifications:', notifErr);
                 }
@@ -279,24 +369,48 @@ export default function Cart() {
               clearCart();
               toast.success('Order placed successfully!');
               setShowPreview(false);
+              setLoading(false);
               navigate('/profile');
             } catch (err) {
               console.error("Error saving order:", err);
               setError("Payment successful but failed to save order. Please contact support.");
               setLoading(false);
-            } finally {
-              window.paymentProcessed = false;
             }
         },
         onClose: function() {
+            clearTimeout(safetyTimer);
             setLoading(false);
-            if (!window.paymentProcessed) toast.error("Payment was cancelled.");
             window.paymentProcessed = false;
+            if (!paymentProcessed) toast.error("Payment was cancelled.");
+        },
+        onFailed: function(response) {
+            clearTimeout(safetyTimer);
+            setLoading(false);
+            window.paymentProcessed = false;
+            const msg = response?.data?.message || response?.message || "Payment failed. Please try again.";
+            toast.error(msg);
+            setError(msg);
+        },
+        onTokenized: async function(response) {
+            try {
+              if (response?.data?.customer?.token) {
+                const tokenRef = doc(db, 'payment_tokens', user.uid);
+                await setDoc(tokenRef, {
+                  token: response.data.customer.token,
+                  email: user.email,
+                  provider: 'korapay',
+                  createdAt: new Date().toISOString(),
+                  updatedAt: new Date().toISOString()
+                }, { merge: true });
+              }
+            } catch (tokenErr) {
+              console.error('Failed to save payment token:', tokenErr);
+            }
         }
       });
-
+      setLoading(false);
     } catch (err) {
-      console.error("Error saving order:", err);
+      console.error("Error in checkout:", err);
       setError(err.message || "Failed to initiate payment. Please contact support.");
       setLoading(false);
       window.paymentProcessed = false;
@@ -402,31 +516,89 @@ export default function Cart() {
             <div className="bg-gradient-to-br from-brandDark to-brandBlack border border-gray-800 rounded-2xl p-6 lg:p-8 shadow-2xl text-white sticky top-8">
               
               <h2 className="text-[11px] font-black text-brandLime uppercase tracking-widest mb-4 border-b border-gray-800 pb-3">Delivery Information</h2>
-              <div className="flex flex-col gap-4 mb-8">
-                <input type="text" placeholder="Full Address" value={deliveryInfo.address} onChange={(e) => setDeliveryInfo({ ...deliveryInfo, address: e.target.value })} className="w-full bg-brandBlack border border-gray-800 text-sm font-bold rounded-lg px-4 py-3 text-white outline-none focus:border-brandLime focus:ring-1 focus:ring-brandLime transition-all shadow-inner placeholder-gray-600" />
-                <div className="flex gap-4">
-                  <input type="text" placeholder="City" value={deliveryInfo.city} onChange={(e) => setDeliveryInfo({ ...deliveryInfo, city: e.target.value })} className="w-full bg-brandBlack border border-gray-800 text-sm font-bold rounded-lg px-4 py-3 text-white outline-none focus:border-brandLime focus:ring-1 focus:ring-brandLime transition-all shadow-inner placeholder-gray-600" />
-                  <input type="text" placeholder="State" value={deliveryInfo.state} onChange={(e) => setDeliveryInfo({ ...deliveryInfo, state: e.target.value })} className="w-full bg-brandBlack border border-gray-800 text-sm font-bold rounded-lg px-4 py-3 text-white outline-none focus:border-brandLime focus:ring-1 focus:ring-brandLime transition-all shadow-inner placeholder-gray-600" />
+
+              {/* Saved Addresses */}
+              {savedAddresses.length > 0 && (
+                <div className="mb-4">
+                  <label className="text-[10px] font-bold text-gray-400 block uppercase tracking-wider mb-2">Saved Addresses</label>
+                  <select
+                    value={selectedAddressIndex}
+                    onChange={(e) => {
+                      const idx = Number(e.target.value);
+                      setSelectedAddressIndex(idx);
+                      if (idx >= 0) {
+                        setDeliveryInfo({ ...savedAddresses[idx], instructions: deliveryInfo.instructions });
+                        setSaveNewAddress(false);
+                      } else {
+                        setDeliveryInfo({ address: '', city: '', state: '', landmark: '', phone: profileData?.phone || '', instructions: deliveryInfo.instructions });
+                      }
+                    }}
+                    className="w-full bg-brandBlack border border-gray-700 text-sm font-bold rounded-lg px-4 py-3 text-white outline-none focus:border-brandLime transition-all mb-3"
+                  >
+                    {savedAddresses.map((addr, idx) => (
+                      <option key={idx} value={idx}>{addr.address}, {addr.city}</option>
+                    ))}
+                    <option value={-1}>+ Add New Address</option>
+                  </select>
                 </div>
-                <input type="tel" placeholder="Phone Number" value={deliveryInfo.phone} onChange={(e) => setDeliveryInfo({ ...deliveryInfo, phone: e.target.value })} className="w-full bg-brandBlack border border-gray-800 text-sm font-bold rounded-lg px-4 py-3 text-white outline-none focus:border-brandLime focus:ring-1 focus:ring-brandLime transition-all shadow-inner placeholder-gray-600" />
-                <textarea placeholder="Additional Instructions (Optional)" value={deliveryInfo.instructions} onChange={(e) => setDeliveryInfo({ ...deliveryInfo, instructions: e.target.value })} className="w-full bg-brandBlack border border-gray-800 text-sm font-bold rounded-lg px-4 py-3 text-white outline-none focus:border-brandLime focus:ring-1 focus:ring-brandLime transition-all shadow-inner resize-y min-h-[80px] placeholder-gray-600"></textarea>
+              )}
+
+              <div className="flex flex-col gap-3 mb-4">
+                <input type="text" placeholder="Full Address *" value={deliveryInfo.address} onChange={(e) => { setDeliveryInfo({ ...deliveryInfo, address: e.target.value }); setSelectedAddressIndex(-1); }} className="w-full bg-brandBlack border border-gray-700 text-sm font-bold rounded-lg px-4 py-3 text-white outline-none focus:border-brandLime transition-all placeholder-gray-500" />
+                <div className="flex gap-3">
+                  <input type="text" value="Nigeria" disabled className="w-1/3 bg-gray-900 border border-gray-800 text-sm font-bold rounded-lg px-4 py-3 text-gray-500 cursor-not-allowed" />
+                  <select value={deliveryInfo.state} onChange={(e) => { setDeliveryInfo({ ...deliveryInfo, state: e.target.value, city: '' }); setSelectedAddressIndex(-1); }} className="w-2/3 bg-brandBlack border border-gray-700 text-sm font-bold rounded-lg px-4 py-3 text-white outline-none focus:border-brandLime transition-all">
+                    <option value="">Select State *</option>
+                    {(nigeriaData || []).map(s => <option key={s.state} value={s.state}>{s.state}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <input type="text" list="lga-list" placeholder="LGA / City *" value={deliveryInfo.city} onChange={(e) => { setDeliveryInfo({ ...deliveryInfo, city: e.target.value }); setSelectedAddressIndex(-1); }} className="w-full bg-brandBlack border border-gray-700 text-sm font-bold rounded-lg px-4 py-3 text-white outline-none focus:border-brandLime transition-all placeholder-gray-500" />
+                  <datalist id="lga-list">
+                    {((nigeriaData || []).find(s => s.state === deliveryInfo.state)?.lgas || []).map(lga => (
+                      <option key={lga.name} value={lga.name} />
+                    ))}
+                  </datalist>
+                </div>
+                <input type="text" placeholder="Landmark (Optional)" value={deliveryInfo.landmark || ''} onChange={(e) => { setDeliveryInfo({ ...deliveryInfo, landmark: e.target.value }); setSelectedAddressIndex(-1); }} className="w-full bg-brandBlack border border-gray-700 text-sm font-bold rounded-lg px-4 py-3 text-white outline-none focus:border-brandLime transition-all placeholder-gray-500" />
+                <div>
+                  <input type="tel" placeholder="WhatsApp Number (+234...) *" value={deliveryInfo.phone} onChange={(e) => { setDeliveryInfo({ ...deliveryInfo, phone: e.target.value }); setSelectedAddressIndex(-1); }} className="w-full bg-brandBlack border border-gray-700 text-sm font-bold rounded-lg px-4 py-3 text-white outline-none focus:border-brandLime transition-all placeholder-gray-500" />
+                  <span className="text-[10px] font-bold text-gray-500 mt-1 block uppercase tracking-wider">Required for WhatsApp updates. Include country code (+234).</span>
+                </div>
+                <textarea placeholder="Additional Instructions (Optional)" value={deliveryInfo.instructions} onChange={(e) => setDeliveryInfo({ ...deliveryInfo, instructions: e.target.value })} className="w-full bg-brandBlack border border-gray-700 text-sm font-bold rounded-lg px-4 py-3 text-white outline-none focus:border-brandLime transition-all resize-y min-h-[70px] placeholder-gray-500"></textarea>
               </div>
 
-              <h2 className="text-[11px] font-black text-brandLime uppercase tracking-widest mb-4 border-b border-gray-800 pb-3">Order Summary</h2>
+              {selectedAddressIndex === -1 && savedAddresses.length < 3 && (
+                <div className="flex items-center gap-2 mb-4">
+                  <input type="checkbox" id="saveAddr" checked={saveNewAddress} onChange={(e) => setSaveNewAddress(e.target.checked)} className="rounded" />
+                  <label htmlFor="saveAddr" className="text-xs font-bold text-gray-400 uppercase tracking-wider">Save this address for next time</label>
+                </div>
+              )}
+
+              <h2 className="text-[11px] font-black text-brandLime uppercase tracking-widest mb-4 border-b border-gray-800 pb-3 mt-6">Order Summary</h2>
               
-              <div className="flex justify-between items-center text-xs font-bold uppercase tracking-wider text-gray-400 mb-4">
-                <span>Subtotal ({items.reduce((a, b) => a + b.quantity, 0)} items)</span>
-                <span className="text-white font-black">{fmt(totalToPayNow)}</span>
-              </div>
-              <div className="flex justify-between items-center text-xs font-bold uppercase tracking-wider text-gray-400 mb-6">
-                <span>Shipping</span>
-                <span>Calculated at checkout</span>
-              </div>
-
-              <div className="flex justify-between items-end border-t border-gray-800 pt-5 mb-8 bg-brandBlack/50 p-4 rounded-xl shadow-inner border border-gray-800/50 mt-4">
-                <span className="text-xs font-bold text-gray-300 uppercase tracking-widest">Total Due Today</span>
-                <span className="text-3xl font-black text-brandLime tracking-tighter">{fmt(totalToPayNow)}</span>
-              </div>
+              {(() => {
+                const deliveryDetails = deliveryInfo.state ? getDeliveryDetails(deliveryInfo.state) : { price: 0, duration: '' };
+                const totalWithDelivery = totalToPayNow + deliveryDetails.price;
+                return (
+                  <>
+                    <div className="flex justify-between items-center text-xs font-bold uppercase tracking-wider text-gray-400 mb-3">
+                      <span>Subtotal ({items.reduce((a, b) => a + b.quantity, 0)} items)</span>
+                      <span className="text-white font-black">{fmt(totalToPayNow)}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-xs font-bold uppercase tracking-wider text-gray-400 mb-5">
+                      <span>Delivery {deliveryInfo.state ? `(${deliveryDetails.duration})` : '(Select state)'}</span>
+                      <span className={deliveryDetails.price > 0 ? 'text-brandLime font-black' : 'text-gray-500'}>
+                        {deliveryDetails.price > 0 ? fmt(deliveryDetails.price) : 'TBD'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-end border-t border-gray-800 pt-4 mb-6 bg-brandBlack/40 p-4 rounded-xl mt-2">
+                      <span className="text-xs font-bold text-gray-300 uppercase tracking-widest">Total Due Today</span>
+                      <span className="text-3xl font-black text-brandLime tracking-tighter">{fmt(deliveryDetails.price > 0 ? totalWithDelivery : totalToPayNow)}</span>
+                    </div>
+                  </>
+                );
+              })()}
 
               {!user && (
                 <div className="bg-amber-500/10 border border-amber-500/30 text-amber-500 px-4 py-3 rounded-lg mb-6 text-xs font-bold uppercase tracking-wide flex items-center gap-2">
@@ -453,21 +625,36 @@ export default function Cart() {
                   } catch(e) {
                     console.error(e);
                   }
-                  setLoading(false);
 
-                  if (items.length === 0) return;
+                  if (items.length === 0) { setLoading(false); return; }
                   if (!deliveryInfo.address || !deliveryInfo.city || !deliveryInfo.state || !deliveryInfo.phone) {
                     toast.error('Please fill out all required delivery fields.');
                     setError('Please fill out all required delivery fields.');
+                    setLoading(false);
                     return;
                   }
                   setError('');
+
+                  // Save new address if requested
+                  if (saveNewAddress) {
+                    try {
+                      const newAddr = { address: deliveryInfo.address, city: deliveryInfo.city, state: deliveryInfo.state, landmark: deliveryInfo.landmark || '', phone: deliveryInfo.phone };
+                      const updatedAddresses = [...savedAddresses, newAddr].slice(0, 3);
+                      await updateDoc(doc(db, 'users', user.uid), { savedAddresses: updatedAddresses });
+                      setSavedAddresses(updatedAddresses);
+                      setSaveNewAddress(false);
+                    } catch (err) {
+                      console.error('Error saving address:', err);
+                    }
+                  }
+
+                  setLoading(false);
                   setShowPreview(true);
                 }}
                 disabled={loading}
                 className="w-full bg-brandLime text-brandBlack hover:bg-white border border-transparent hover:border-brandLime font-black py-4 rounded-xl text-sm uppercase tracking-widest transition-all shadow-xl disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center gap-3 transform hover:-translate-y-1"
               >
-                Review & Confirm Order
+                {loading ? <><i className="fas fa-spinner fa-spin"></i> Please wait...</> : 'Review & Confirm Order'}
               </button>
 
               <div className="mt-6 flex items-center justify-center gap-2 text-[10px] font-bold text-gray-500 uppercase tracking-widest">

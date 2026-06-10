@@ -1,13 +1,12 @@
 import { Navigate, Outlet, NavLink } from 'react-router-dom';
 import useAuthStore from '../../store/useAuthStore';
-import { Package, PlusCircle, LogOut, User, ClipboardList, Settings, Menu, X, Tag, Briefcase } from 'lucide-react';
+import { Package, PlusCircle, LogOut, User, Users, ClipboardList, Settings, Menu, X, Tag, Briefcase } from 'lucide-react';
 import { auth } from '../../firebase';
-import { signOut } from 'firebase/auth';
 import toast from 'react-hot-toast';
 import { useState } from 'react';
 
 export default function AdminLayout() {
-  const { user, isAdmin, loading } = useAuthStore();
+  const { user, isAdmin, loading, logout } = useAuthStore();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // Wait for auth + Firestore fetch to complete before making access decision
@@ -29,6 +28,7 @@ export default function AdminLayout() {
     { to: "/admin/categories", icon: <Tag size={18} />, label: "Manage Categories" },
     { to: "/admin/brands", icon: <Briefcase size={18} />, label: "Manage Brands" },
     { to: "/admin/orders", icon: <ClipboardList size={18} />, label: "Customer Orders" },
+    { to: "/admin/users", icon: <Users size={18} />, label: "Registered Users" },
     { to: "/admin/new", icon: <PlusCircle size={18} />, label: "Add Product" },
     { to: "/admin/settings", icon: <Settings size={18} />, label: "Site Settings" },
     { to: "/profile", icon: <User size={18} />, label: "My Profile" },
@@ -88,7 +88,7 @@ export default function AdminLayout() {
         <div className="p-4 border-t border-gray-800">
           <button
             onClick={async () => {
-              await signOut(auth);
+              await logout();
               toast.success('Signed out successfully');
             }}
             className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm uppercase tracking-wider font-bold bg-transparent border border-gray-700 text-gray-300 hover:bg-gray-800 hover:text-brandLime transition-all"

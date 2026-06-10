@@ -28,7 +28,7 @@ export default function Login() {
       if (userDocSnap.exists()) {
         const userData = userDocSnap.data();
         
-        if (userData.isAdmin) {
+        if (userData.role === 'admin') {
           toast.success('Welcome back, Admin!');
           navigate('/admin');
           return;

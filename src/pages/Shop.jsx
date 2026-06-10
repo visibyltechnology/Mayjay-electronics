@@ -55,12 +55,6 @@ export default function Shop() {
 
     const [activeCategories, setActiveCategories] = useState([]);
     const [activeBrands, setActiveBrands] = useState([]);
-    const [minPrice, setMinPrice] = useState('');
-    const [maxPrice, setMaxPrice] = useState('');
-    const [condition, setCondition] = useState('All');
-    const [activeRam, setActiveRam] = useState('All');
-    const [activeStorage, setActiveStorage] = useState('All');
-    const [activeOs, setActiveOs] = useState('All');
     const [search, setSearch] = useState(searchParams.get('search') || '');
     const [currentPage, setCurrentPage] = useState(1);
     const [products, setProducts] = useState([]);
@@ -122,16 +116,10 @@ export default function Shop() {
         if (cat) {
             const match = categories.find(c => c.name.toLowerCase() === cat.toLowerCase())?.name;
             if (match) {
-                setActiveCategories([match]);
+            setActiveCategories([match]);
             }
             setSearch('');
             setActiveBrands([]);
-            setMinPrice('');
-            setMaxPrice('');
-            setCondition('All');
-            setActiveRam('All');
-            setActiveStorage('All');
-            setActiveOs('All');
         }
         
         const searchQ = searchParams.get('search');
@@ -139,18 +127,12 @@ export default function Shop() {
             setSearch(searchQ);
             setActiveCategories([]);
             setActiveBrands([]);
-            setMinPrice('');
-            setMaxPrice('');
-            setCondition('All');
-            setActiveRam('All');
-            setActiveStorage('All');
-            setActiveOs('All');
         }
     }, [location.search, location.pathname, searchParams, categories]);
 
     useEffect(() => {
         setCurrentPage(1);
-    }, [search, activeCategories, activeBrands, minPrice, maxPrice, condition, activeRam, activeStorage, activeOs]);
+    }, [search, activeCategories, activeBrands]);
 
     const filtered = products.filter(p => {
         const matchCat = activeCategories.length === 0 || activeCategories.includes(p.category);
@@ -160,18 +142,8 @@ export default function Shop() {
         const searchTerms = search.toLowerCase().trim().split(/\s+/).filter(Boolean);
         const searchableText = `${p.name || ''} ${normalizedBrand} ${p.category || ''} ${p.tag || ''} ${p.description || ''} ${p.ram || ''} ${p.storage || ''} ${p.os || ''} ${p.condition || ''}`.toLowerCase();
         const matchSearch = searchTerms.length === 0 || searchTerms.every(term => searchableText.includes(term));
-
-        const pPrice = Number(p.price) || 0;
-        const matchMinPrice = minPrice === '' || pPrice >= Number(minPrice);
-        const matchMaxPrice = maxPrice === '' || pPrice <= Number(maxPrice);
         
-        const matchCondition = condition === 'All' || p.condition === condition || (p.name && p.name.includes(condition)) || (p.description && p.description.includes(condition));
-        
-        const matchRam = activeRam === 'All' || p.ram === activeRam || (p.name && p.name.includes(activeRam)) || (p.description && p.description.includes(activeRam));
-        const matchStorage = activeStorage === 'All' || p.storage === activeStorage || (p.name && p.name.includes(activeStorage)) || (p.description && p.description.includes(activeStorage));
-        const matchOs = activeOs === 'All' || p.os === activeOs || (p.name && p.name.includes(activeOs)) || (p.description && p.description.includes(activeOs));
-        
-        return matchCat && matchBrand && matchSearch && matchMinPrice && matchMaxPrice && matchCondition && matchRam && matchStorage && matchOs;
+        return matchCat && matchBrand && matchSearch;
     });
 
     // Sort filtered items based on sortBy selection
@@ -189,7 +161,7 @@ export default function Shop() {
         }
     });
 
-    const itemsPerPage = 120;
+    const itemsPerPage = 100;
     const indexOfLastItem = currentPage * itemsPerPage;
     const indexOfFirstItem = indexOfLastItem - itemsPerPage;
     const currentItems = sorted.slice(indexOfFirstItem, indexOfLastItem);
@@ -200,7 +172,7 @@ export default function Shop() {
             {/* Page Header */}
             <div className="bg-brandBlack border-b border-gray-800 shadow-xl py-8 relative overflow-hidden">
                 <div className="absolute inset-0 opacity-10 bg-[url('https://images.unsplash.com/photo-1509391366360-2e959784a276?w=1000&q=80')] mix-blend-overlay bg-cover bg-center"></div>
-                <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 2xl:px-12 relative z-10">
+                <div className="w-full mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
                     <div className="flex flex-col md:flex-row justify-between items-center gap-6">
                         <div className="w-full md:w-auto">
                             <div className="inline-flex items-center space-x-2 bg-brandLime/10 border border-brandLime/30 text-brandLime px-3 py-1 rounded-full text-[10px] font-bold tracking-widest uppercase mb-3">
@@ -227,7 +199,7 @@ export default function Shop() {
                 </div>
             </div>
 
-            <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 2xl:px-12 py-8 flex flex-col md:flex-row gap-8 flex-grow">
+            <div className="w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 flex flex-col md:flex-row gap-8 flex-grow">
                 {/* Sidebar Filters */}
                 <div className="w-full md:w-64 flex-shrink-0">
                     <div className="bg-white border border-gray-100 overflow-y-auto sticky top-28 shadow-xl rounded-2xl mb-6" style={{ maxHeight: 'calc(100vh - 8rem)' }}>
@@ -334,94 +306,7 @@ export default function Shop() {
                             })}
                         </div>
 
-                        {/* Price Range */}
-                        <div className="bg-brandBlack text-brandLime px-5 py-4 font-black uppercase tracking-widest text-xs flex items-center justify-between border-t border-gray-800">
-                            <span>Price (₦)</span>
-                            <i className="fas fa-money-bill-wave text-gray-400 text-sm"></i>
-                        </div>
-                        <div className="p-4 flex items-center gap-2 bg-gray-50/30">
-                            <input 
-                                type="number" 
-                                placeholder="Min" 
-                                value={minPrice}
-                                onChange={e => { setMinPrice(e.target.value); setCurrentPage(1); }}
-                                className="w-full bg-white border border-gray-200 focus:border-brandLime focus:ring-1 focus:ring-brandLime rounded-lg py-2 px-3 outline-none text-sm transition-all font-medium text-brandDark"
-                            />
-                            <span className="text-gray-400 font-bold">-</span>
-                            <input 
-                                type="number" 
-                                placeholder="Max" 
-                                value={maxPrice}
-                                onChange={e => { setMaxPrice(e.target.value); setCurrentPage(1); }}
-                                className="w-full bg-white border border-gray-200 focus:border-brandLime focus:ring-1 focus:ring-brandLime rounded-lg py-2 px-3 outline-none text-sm transition-all font-medium text-brandDark"
-                            />
-                        </div>
 
-                        {/* Condition */}
-                        <div className="bg-brandBlack text-brandLime px-5 py-4 font-black uppercase tracking-widest text-xs flex items-center justify-between border-t border-gray-800">
-                            <span>Condition</span>
-                            <i className="fas fa-box text-gray-400 text-sm"></i>
-                        </div>
-                        <div className="p-4 bg-gray-50/30">
-                            <select 
-                                value={condition} 
-                                onChange={e => { setCondition(e.target.value); setCurrentPage(1); }}
-                                className="w-full bg-white border border-gray-200 focus:border-brandLime focus:ring-1 focus:ring-brandLime text-brandDark font-bold py-2.5 px-3 rounded-lg text-sm outline-none transition-all cursor-pointer"
-                            >
-                                <option value="All">Any Condition</option>
-                                <option value="New">Brand New</option>
-                                <option value="Refurbished">Refurbished / UK Used</option>
-                                <option value="Used">Used</option>
-                            </select>
-                        </div>
-
-                        {/* Specifications - conditional on category */}
-                        {(activeCategories.length === 0 || activeCategories.some(cat => ['Phones', 'Laptops', 'Gaming', 'Tablets'].includes(cat))) && (
-                            <>
-                                <div className="bg-brandBlack text-brandLime px-5 py-4 font-black uppercase tracking-widest text-xs flex items-center justify-between border-t border-gray-800">
-                                    <span>Specifications</span>
-                                    <i className="fas fa-microchip text-gray-400 text-sm"></i>
-                                </div>
-                                <div className="p-4 space-y-4 bg-gray-50/30 rounded-b-2xl">
-                                    <div>
-                                        <label className="block text-xs font-black text-gray-500 mb-1.5 uppercase tracking-widest">RAM</label>
-                                        <select value={activeRam} onChange={e => { setActiveRam(e.target.value); setCurrentPage(1); }} className="w-full bg-white border border-gray-200 focus:border-brandLime focus:ring-1 focus:ring-brandLime text-brandDark font-bold py-2.5 px-3 rounded-lg text-sm outline-none transition-all cursor-pointer">
-                                            <option value="All">Any RAM</option>
-                                            <option value="4GB">4GB</option>
-                                            <option value="6GB">6GB</option>
-                                            <option value="8GB">8GB</option>
-                                            <option value="12GB">12GB</option>
-                                            <option value="16GB">16GB</option>
-                                            <option value="32GB">32GB</option>
-                                            <option value="64GB">64GB</option>
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label className="block text-xs font-black text-gray-500 mb-1.5 uppercase tracking-widest">Storage</label>
-                                        <select value={activeStorage} onChange={e => { setActiveStorage(e.target.value); setCurrentPage(1); }} className="w-full bg-white border border-gray-200 focus:border-brandLime focus:ring-1 focus:ring-brandLime text-brandDark font-bold py-2.5 px-3 rounded-lg text-sm outline-none transition-all cursor-pointer">
-                                            <option value="All">Any Storage</option>
-                                            <option value="64GB">64GB</option>
-                                            <option value="128GB">128GB</option>
-                                            <option value="256GB">256GB</option>
-                                            <option value="512GB">512GB</option>
-                                            <option value="1TB">1TB</option>
-                                            <option value="2TB">2TB</option>
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label className="block text-xs font-black text-gray-500 mb-1.5 uppercase tracking-widest">OS</label>
-                                        <select value={activeOs} onChange={e => { setActiveOs(e.target.value); setCurrentPage(1); }} className="w-full bg-white border border-gray-200 focus:border-brandLime focus:ring-1 focus:ring-brandLime text-brandDark font-bold py-2.5 px-3 rounded-lg text-sm outline-none transition-all cursor-pointer">
-                                            <option value="All">Any OS</option>
-                                            <option value="iOS">iOS</option>
-                                            <option value="Android">Android</option>
-                                            <option value="Windows">Windows</option>
-                                            <option value="macOS">macOS</option>
-                                            <option value="Linux">Linux</option>
-                                        </select>
-                                    </div>
-                                </div>
-                            </>
-                        )}
                     </div>
                 </div>
 
@@ -451,7 +336,7 @@ export default function Shop() {
                     </div>
 
                     {loading ? (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-6 sm:gap-8">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6 sm:gap-8">
                             {[1, 2, 3, 4, 5, 6].map(i => (
                                 <div key={i} className="bg-white p-4 rounded-xl shadow-md border border-gray-100 h-96 animate-pulse flex flex-col justify-between">
                                     <div className="w-full h-56 bg-gray-100 rounded-lg mb-4"></div>
@@ -473,12 +358,6 @@ export default function Shop() {
                                     setSearch(''); 
                                     setActiveCategories([]);
                                     setActiveBrands([]);
-                                    setMinPrice('');
-                                    setMaxPrice('');
-                                    setCondition('All');
-                                    setActiveRam('All');
-                                    setActiveStorage('All');
-                                    setActiveOs('All');
                                 }}
                                 className="bg-brandDark hover:bg-brandBlack text-brandLime font-black py-3 px-8 rounded-xl uppercase tracking-widest text-xs transition-all shadow-md hover:shadow-xl hover:-translate-y-0.5"
                             >
@@ -486,7 +365,7 @@ export default function Shop() {
                             </button>
                         </div>
                     ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-6 sm:gap-8">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6 sm:gap-8">
                             {currentItems.map((p, idx) => {
                                 const inStock = isProductInStock(p);
                                 return (

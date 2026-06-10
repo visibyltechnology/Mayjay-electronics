@@ -6,26 +6,27 @@ const useCartStore = create(
   persist(
     (set, get) => ({
       items: [],
-      _hydrated: false,
-
-      setHydrated: () => set({ _hydrated: true }),
 
       addToCart: (product, quantity = 1, paymentChoice = 'full', installments = 1, periodPayment = 0, paymentFrequency = 'monthly') => {
         set((state) => {
-          // Check if item exists with same payment choice and frequency
           const existingItemIndex = state.items.findIndex(
-            (item) => item.id === product.id && item.paymentChoice === paymentChoice && item.installments === installments && item.paymentFrequency === paymentFrequency
+            (item) =>
+              item.id === product.id &&
+              item.paymentChoice === paymentChoice &&
+              item.installments === installments &&
+              item.paymentFrequency === paymentFrequency
           );
 
           if (existingItemIndex > -1) {
-            // Update quantity
             const newItems = [...state.items];
-            newItems[existingItemIndex].quantity += quantity;
+            newItems[existingItemIndex] = {
+              ...newItems[existingItemIndex],
+              quantity: newItems[existingItemIndex].quantity + quantity
+            };
             toast.success('Cart updated');
             return { items: newItems };
           }
 
-          // Add new item
           toast.success('Added to cart');
           return {
             items: [
@@ -37,7 +38,7 @@ const useCartStore = create(
                 installments,
                 periodPayment,
                 paymentFrequency,
-                cartItemId: Math.random().toString(36).substr(2, 9)
+                cartItemId: `${product.id}_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`
               }
             ]
           };
@@ -66,39 +67,27 @@ const useCartStore = create(
           items: state.items.map((item) => {
             if (item.paymentChoice !== 'installment') return item;
             if (item.paymentFrequency === newFrequency) return item;
-            
-            let newPeriodPayment = item.periodPayment || item.monthlyPayment;
+
+            let newPeriodPayment = item.periodPayment || item.monthlyPayment || 0;
             if (newFrequency === 'weekly' && item.paymentFrequency === 'monthly') {
-               newPeriodPayment = newPeriodPayment / 4;
+              newPeriodPayment = newPeriodPayment / 4;
             } else if (newFrequency === 'monthly' && item.paymentFrequency === 'weekly') {
-               newPeriodPayment = newPeriodPayment * 4;
+              newPeriodPayment = newPeriodPayment * 4;
             }
 
-            return {
-              ...item,
-              paymentFrequency: newFrequency,
-              periodPayment: newPeriodPayment
-            };
+            return { ...item, paymentFrequency: newFrequency, periodPayment: newPeriodPayment };
           })
         }));
       },
 
-      // Computed properties (getters)
-      getTotalItems: () => {
-        return get().items.reduce((total, item) => total + item.quantity, 0);
-      },
-
       getCartTotal: () => {
+        const INTEREST = { 2: 0, 3: 10, 4: 10, 5: 20, 6: 20 };
         return get().items.reduce((total, item) => {
           if (item.paymentChoice === 'full') {
             return total + (item.price * item.quantity);
-          } else {
-            // If they chose installment, we calculate the total amount they are committing to
-            const INTEREST = { 2: 0, 3: 10, 4: 10, 5: 20, 6: 20 };
-            const rate = INTEREST[item.installments] / 100;
-            const fullAmount = item.price * (1 + rate);
-            return total + (fullAmount * item.quantity);
           }
+          const rate = (INTEREST[item.installments] || 0) / 100;
+          return total + (item.price * (1 + rate) * item.quantity);
         }, 0);
       },
 
@@ -106,20 +95,16 @@ const useCartStore = create(
         return get().items.reduce((total, item) => {
           if (item.paymentChoice === 'full') {
             return total + (item.price * item.quantity);
-          } else {
-            // First period payment
-            return total + ((item.periodPayment || item.monthlyPayment || 0) * item.quantity);
           }
+          return total + ((item.periodPayment || item.monthlyPayment || 0) * item.quantity);
         }, 0);
       }
     }),
     {
-      name: 'mayjay-cart',
-      onRehydrateStorage: () => (state) => {
-        if (state) state.setHydrated();
-      },
+      name: 'mayjay-cart-v2'
     }
   )
 );
 
 export default useCartStore;
+

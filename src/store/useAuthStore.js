@@ -21,7 +21,8 @@ const useAuthStore = create((set) => ({
         const { doc, getDoc } = await import('firebase/firestore');
         const { db } = await import('../firebase');
         const userDoc = await getDoc(doc(db, 'users', user.uid));
-        const isAdmin = userDoc.exists() ? userDoc.data().isAdmin === true : false;
+        const data = userDoc.exists() ? userDoc.data() : {};
+        const isAdmin = data.isAdmin === true || data.role === 'admin';
         set({ isAdmin, loading: false });
       } catch (err) {
         console.error('Failed to fetch admin status:', err);

@@ -43,6 +43,27 @@ const CustomCheckbox = ({ checked }) => (
     </div>
 );
 
+// Star Rating display component
+const StarRating = ({ rating = 0, count }) => {
+    const stars = [];
+    const r = Math.min(5, Math.max(0, rating));
+    for (let i = 1; i <= 5; i++) {
+        if (r >= i) {
+            stars.push(<i key={i} className="fas fa-star text-yellow-400"></i>);
+        } else if (r >= i - 0.5) {
+            stars.push(<i key={i} className="fas fa-star-half-alt text-yellow-400"></i>);
+        } else {
+            stars.push(<i key={i} className="far fa-star text-gray-300"></i>);
+        }
+    }
+    return (
+        <div className="flex items-center gap-1">
+            <div className="flex items-center gap-0.5 text-[10px]">{stars}</div>
+            {count > 0 && <span className="text-[10px] text-gray-400 font-bold">({count})</span>}
+        </div>
+    );
+};
+
 export default function Shop() {
     const [searchParams] = useSearchParams();
     const location = useLocation();
@@ -400,9 +421,17 @@ export default function Shop() {
                                         <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1">
                                             {normalizeBrand(p.brand) || 'Official Partner'}
                                         </p>
-                                        <h3 className="text-base font-black text-brandDark mb-3 leading-tight group-hover:text-brandLime transition-colors duration-300 line-clamp-2 min-h-[44px]">
+                                        <h3 className="text-base font-black text-brandDark mb-2 leading-tight group-hover:text-brandLime transition-colors duration-300 line-clamp-2 min-h-[44px]">
                                             {p.name}
                                         </h3>
+                                        
+                                        {/* Star Rating */}
+                                        <div className="mb-3">
+                                            <StarRating
+                                                rating={p.averageRating || p.rating || 0}
+                                                count={p.reviewCount || p.numReviews || 0}
+                                            />
+                                        </div>
                                         
                                         <div className="mt-auto pt-4 border-t border-gray-100">
                                             {/* Inventory Status */}

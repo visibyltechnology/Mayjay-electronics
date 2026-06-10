@@ -4,24 +4,14 @@ import { doc, getDoc, setDoc, updateDoc, collection, query, where, getDocs } fro
 import { db } from '../../firebase';
 import {
   ArrowLeft, Save, Image as ImageIcon, AlertCircle,
-  Tag, Ruler, DollarSign, Star, Upload, X, CheckCircle2, Sparkles
+  Tag, Ruler, DollarSign, Star, Upload, X, CheckCircle2, Sparkles, Infinity
 } from 'lucide-react';
 import { uploadImage } from '../../utils/uploadImage';
+import { listenToCategories, DEFAULT_CATEGORIES, CATEGORY_STYLES } from '../../utils/categoryService';
+import { listenToBrands, DEFAULT_BRANDS } from '../../utils/brandService';
 import toast from 'react-hot-toast';
 
-const CATEGORIES = ['Air Conditioners', 'Televisions', 'Washing Machines', 'Refrigerators', 'Generators', 'Phones', 'Laptops', 'Audio', 'Gaming'];
 
-const CATEGORY_COLORS = {
-  'Air Conditioners':  { bg: 'rgba(59,130,246,0.12)', text: '#3b82f6', border: 'rgba(59,130,246,0.35)' },
-  'Televisions':     { bg: 'rgba(139,92,246,0.12)', text: '#7c3aed', border: 'rgba(139,92,246,0.35)' },
-  'Washing Machines': { bg: 'rgba(236,72,153,0.12)', text: '#db2777', border: 'rgba(236,72,153,0.35)' },
-  'Refrigerators': { bg: 'rgba(245,158,11,0.12)', text: '#d97706', border: 'rgba(245,158,11,0.35)' },
-  'Generators': { bg: 'rgba(16,185,129,0.12)', text: '#059669', border: 'rgba(16,185,129,0.35)' },
-  'Phones': { bg: 'rgba(6,182,212,0.12)', text: '#0891b2', border: 'rgba(6,182,212,0.35)' },
-  'Laptops': { bg: 'rgba(168,85,247,0.12)', text: '#a855f7', border: 'rgba(168,85,247,0.35)' },
-  'Audio': { bg: 'rgba(244,63,94,0.12)', text: '#f43f5e', border: 'rgba(244,63,94,0.35)' },
-  'Gaming': { bg: 'rgba(251,146,60,0.12)', text: '#fb923c', border: 'rgba(251,146,60,0.35)' },
-};
 
 export default function ProductForm() {
   const { id } = useParams();
@@ -32,14 +22,23 @@ export default function ProductForm() {
 
   const [formData, setFormData] = useState({
     name: '',
-    category: 'Air Conditioners',
+    category: '',
     length: '18"',
+    brand: '',
+    description: '',
     price: '',
     pss: '',
+    tag: '',
     featured: false,
     featuredPosition: '',
-    img: ''
+    img: '',
+    items_left: 0,
+    unlimited_stock: false,
+    inventory_status: 'in_stock',
+    is_hidden: false
   });
+  const [categories, setCategories] = useState([]);
+  const [brands, setBrands] = useState([]);
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -48,6 +47,28 @@ export default function ProductForm() {
   const [showFeaturedModal, setShowFeaturedModal] = useState(false);
   const [positionInput, setPositionInput] = useState('');
   const [showConfirmDelete, setShowConfirmDelete] = useState(false);
+
+  // Load categories dynamically from Firestore
+  useEffect(() => {
+    const unsub = listenToCategories((cats) => {
+      const list = cats.length > 0 ? cats : DEFAULT_CATEGORIES;
+      setCategories(list);
+      // Set default category to first non-All option if not editing
+      if (!isEditing && !formData.category) {
+        const first = list.find(c => c.name !== 'All');
+        if (first) setFormData(prev => ({ ...prev, category: first.name }));
+      }
+    });
+    return () => unsub();
+  }, [isEditing]);
+
+  // Load brands dynamically from Firestore
+  useEffect(() => {
+    const unsub = listenToBrands((brandList) => {
+      setBrands(brandList.length > 0 ? brandList : DEFAULT_BRANDS);
+    });
+    return () => unsub();
+  }, []);
 
   useEffect(() => {
     if (isEditing) {
@@ -138,9 +159,16 @@ export default function ProductForm() {
         ...formData,
         price: Number(formData.price),
         pss: Number(formData.pss || 0),
+        brand: formData.brand || '',
+        description: formData.description || '',
+        tag: formData.tag || '',
         img: imageUrl,
         featured: formData.featured,
         featuredPosition: formData.featured ? Number(positionInput) || 0 : '',
+        items_left: Number(formData.items_left || 0),
+        unlimited_stock: formData.unlimited_stock || false,
+        inventory_status: formData.unlimited_stock ? 'in_stock' : (Number(formData.items_left || 0) === 0 ? 'out_of_stock' : (formData.inventory_status || 'in_stock')),
+        is_hidden: Boolean(formData.is_hidden),
         updatedAt: new Date()
       };
 
@@ -189,7 +217,13 @@ export default function ProductForm() {
     setShowFeaturedModal(false);
   };
 
-  const catColor = CATEGORY_COLORS[formData.category] || CATEGORY_COLORS['Air Conditioners'];
+  const catStyle = CATEGORY_STYLES[formData.category] || { bg: 'rgba(107,114,128,0.08)', text: '#6b7280', border: 'rgba(107,114,128,0.25)' };
+  // Map CATEGORY_STYLES to the rgb-alpha format used in the form
+  const catColor = {
+    bg: catStyle.bg,
+    text: catStyle.text,
+    border: catStyle.border,
+  };
   const currentImg = imagePreview || formData.img;
   const hasDiscount = formData.pss && formData.price && Number(formData.pss) < Number(formData.price);
   const discountPct = hasDiscount
@@ -278,8 +312,8 @@ export default function ProductForm() {
               />
             </FieldGroup>
 
-            {/* Category + Length */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+            {/* Category + Length + Tag */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16 }}>
               <FieldGroup label="Category" icon={<Tag size={14} />} accent={catColor.text}>
                 <div style={{ position: 'relative' }}>
                   <select
@@ -295,7 +329,9 @@ export default function ProductForm() {
                     onFocus={e => { e.target.style.boxShadow = `0 0 0 3px ${catColor.bg}`; }}
                     onBlur={e => { e.target.style.boxShadow = 'none'; }}
                   >
-                    {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                    {categories
+                      .filter(c => c.name !== 'All')
+                      .map(c => <option key={c.id || c.name} value={c.name}>{c.name}</option>)}
                   </select>
                   <div style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: catColor.text }}>▾</div>
                 </div>
@@ -307,6 +343,71 @@ export default function ProductForm() {
                   onChange={handleChange} required placeholder='e.g. 18"'
                   style={inputStyle}
                   onFocus={e => { e.target.style.borderColor = '#059669'; e.target.style.boxShadow = '0 0 0 3px rgba(5,150,105,0.12)'; }}
+                  onBlur={e => { e.target.style.borderColor = '#e5e7eb'; e.target.style.boxShadow = 'none'; }}
+                />
+              </FieldGroup>
+
+              <FieldGroup label="Product Tag" icon={<Sparkles size={14} />} accent="#ec4899">
+                <div style={{ position: 'relative' }}>
+                  <select
+                    name="tag" value={formData.tag || ''} onChange={handleChange}
+                    style={{
+                      ...inputStyle,
+                      paddingLeft: 16, cursor: 'pointer',
+                      appearance: 'none'
+                    }}
+                    onFocus={e => { e.target.style.borderColor = '#ec4899'; e.target.style.boxShadow = '0 0 0 3px rgba(236,72,153,0.12)'; }}
+                    onBlur={e => { e.target.style.borderColor = '#e5e7eb'; e.target.style.boxShadow = 'none'; }}
+                  >
+                    <option value="">None</option>
+                    <option value="Top Seller">Top Seller</option>
+                    <option value="Official Warranty">Official Warranty</option>
+                    <option value="Fast Moving">Fast Moving</option>
+                    <option value="Best Deal">Best Deal</option>
+                    <option value="Premium">Premium</option>
+                    <option value="Budget Pick">Budget Pick</option>
+                    <option value="Hot Sale">Hot Sale</option>
+                    <option value="Clearance">Clearance</option>
+                  </select>
+                  <div style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: '#6b7280' }}>▾</div>
+                </div>
+              </FieldGroup>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 16 }}>
+              <FieldGroup label="Brand" icon={<Tag size={14} />} accent="#10b981">
+                <div style={{ position: 'relative' }}>
+                  <input
+                    type="text" name="brand" value={formData.brand || ''}
+                    onChange={handleChange}
+                    list="brand-list"
+                    placeholder="Select or type a brand…"
+                    style={inputStyle}
+                    onFocus={e => { e.target.style.borderColor = '#10b981'; e.target.style.boxShadow = '0 0 0 3px rgba(16,185,129,0.12)'; }}
+                    onBlur={e => { e.target.style.borderColor = '#e5e7eb'; e.target.style.boxShadow = 'none'; }}
+                  />
+                  <datalist id="brand-list">
+                    {brands.map(b => <option key={b.id || b.name} value={b.name} />)}
+                  </datalist>
+                  {formData.brand && !brands.some(b => b.name === formData.brand) && (
+                    <span style={{
+                      position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)',
+                      background: '#f59e0b', color: '#fff',
+                      fontSize: 9, fontWeight: 800, padding: '2px 7px', borderRadius: 99, letterSpacing: '0.06em'
+                    }}>CUSTOM</span>
+                  )}
+                </div>
+                <p style={{ margin: '4px 0 0', fontSize: 11, color: '#9ca3af' }}>
+                  Choose from the list or type a custom brand name
+                </p>
+              </FieldGroup>
+
+              <FieldGroup label="Product Description / Features" icon={<Sparkles size={14} />} accent="#8b5cf6">
+                <textarea
+                  name="description" value={formData.description || ''}
+                  onChange={handleChange} placeholder="Enter features separated by lines (e.g. Screen Size: 65 Inches)"
+                  style={{...inputStyle, minHeight: '120px', resize: 'vertical'}}
+                  onFocus={e => { e.target.style.borderColor = '#8b5cf6'; e.target.style.boxShadow = '0 0 0 3px rgba(139,92,246,0.12)'; }}
                   onBlur={e => { e.target.style.borderColor = '#e5e7eb'; e.target.style.boxShadow = 'none'; }}
                 />
               </FieldGroup>
@@ -349,6 +450,55 @@ export default function ProductForm() {
                   )}
                 </div>
                 <p style={{ margin: '4px 0 0', fontSize: 11, color: '#9ca3af' }}>Leave empty if no sale</p>
+              </FieldGroup>
+            </div>
+
+            {/* Inventory & Visibility */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 16 }}>
+              <FieldGroup label="Items Left" icon={<Tag size={14} />} accent="#059669">
+                <input
+                  type="number" name="items_left" value={formData.items_left}
+                  onChange={handleChange} required min="0" disabled={formData.unlimited_stock}
+                  style={{...inputStyle, opacity: formData.unlimited_stock ? 0.6 : 1}}
+                  onFocus={e => { e.target.style.borderColor = '#059669'; e.target.style.boxShadow = '0 0 0 3px rgba(5,150,105,0.12)'; }}
+                  onBlur={e => { e.target.style.borderColor = '#e5e7eb'; e.target.style.boxShadow = 'none'; }}
+                />
+              </FieldGroup>
+              <FieldGroup label="Unlimited Stock" icon={<Infinity size={14} />} accent="#059669">
+                <div style={{ display: 'flex', alignItems: 'center', height: '42px', paddingLeft: 10, background: formData.unlimited_stock ? '#ecfdf5' : '#fff', border: `1px solid ${formData.unlimited_stock ? '#a7f3d0' : '#e5e7eb'}`, borderRadius: 10 }}>
+                  <input
+                    type="checkbox" name="unlimited_stock" checked={formData.unlimited_stock}
+                    onChange={handleChange}
+                    style={{ width: 18, height: 18, cursor: 'pointer', accentColor: '#059669' }}
+                  />
+                  <span style={{ marginLeft: 8, fontSize: 13, fontWeight: 600, color: formData.unlimited_stock ? '#059669' : '#9ca3af' }}>Unlimited</span>
+                </div>
+                <p style={{ margin: '4px 0 0', fontSize: 11, color: '#9ca3af' }}>Never runs out of stock</p>
+              </FieldGroup>
+              <FieldGroup label="Inventory Status" icon={<CheckCircle2 size={14} />} accent="#059669">
+                <div style={{
+                  display: 'flex', alignItems: 'center', height: '42px', paddingLeft: 12,
+                  background: (formData.unlimited_stock || Number(formData.items_left || 0) > 0) ? '#ecfdf5' : '#fef2f2',
+                  border: `1px solid ${(formData.unlimited_stock || Number(formData.items_left || 0) > 0) ? '#a7f3d0' : '#fca5a5'}`,
+                  borderRadius: 10, fontWeight: 600, fontSize: 13,
+                  color: (formData.unlimited_stock || Number(formData.items_left || 0) > 0) ? '#059669' : '#dc2626'
+                }}>
+                  <i className={`fas ${(formData.unlimited_stock || Number(formData.items_left || 0) > 0) ? 'fa-check-circle' : 'fa-exclamation-circle'} mr-2`}></i>
+                  {formData.unlimited_stock || Number(formData.items_left || 0) > 0 ? 'In Stock' : 'Out of Stock'}
+                </div>
+                <p style={{ margin: '4px 0 0', fontSize: 11, color: '#9ca3af' }}>
+                  {formData.unlimited_stock ? 'Unlimited' : (Number(formData.items_left || 0) > 0 ? `${formData.items_left} available` : 'Out of stock')}
+                </p>
+              </FieldGroup>
+              <FieldGroup label="Hidden from Shop" icon={<AlertCircle size={14} />} accent="#dc2626">
+                <div style={{ display: 'flex', alignItems: 'center', height: '42px', paddingLeft: 10, background: formData.is_hidden ? '#fef2f2' : '#fff', border: `1px solid ${formData.is_hidden ? '#fca5a5' : '#e5e7eb'}`, borderRadius: 10 }}>
+                  <input
+                    type="checkbox" name="is_hidden" checked={formData.is_hidden}
+                    onChange={handleChange}
+                    style={{ width: 18, height: 18, cursor: 'pointer', accentColor: '#dc2626' }}
+                  />
+                  <span style={{ marginLeft: 8, fontSize: 13, fontWeight: 600, color: formData.is_hidden ? '#dc2626' : '#374151' }}>Hide Product</span>
+                </div>
               </FieldGroup>
             </div>
 

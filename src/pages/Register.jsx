@@ -5,7 +5,7 @@ import { auth, db } from '../firebase';
 import { doc, setDoc } from 'firebase/firestore';
 import Footer from '../components/Footer';
 import { Eye, EyeOff, CheckCircle, UserPlus } from 'lucide-react';
-import emailjs from '@emailjs/browser';
+import { sendRegistrationOTPEmail } from '../utils/email';
 import toast from 'react-hot-toast';
 
 export default function Register() {
@@ -54,26 +54,18 @@ export default function Register() {
         lastName: formData.lastName,
         phone: formData.phone,
         email: formData.email,
+        isAdmin: false,
         isEmailVerified: false,
         otpCode: otpCode,
         otpExpiresAt: otpExpiresAt,
         createdAt: new Date()
       });
 
-      try {
-        await emailjs.send(
-          'service_go3mq9r',
-          'template_g5muxfu',
-          {
-            email: formData.email,
-            name: formData.firstName,
-            otp: otpCode,
-            code: otpCode
-          },
-          'A7Sq--0D6K2sijujF'
-        );
-      } catch (emailErr) {
-        console.error("EmailJS error:", emailErr);
+      const emailSent = await sendRegistrationOTPEmail(formData.email, formData.firstName, otpCode);
+      if (!emailSent) {
+        console.warn('OTP email failed to send — user can still verify manually.');
+      } else {
+        toast.success('OTP sent! Check your email inbox (and spam folder).');
       }
 
       navigate(`/verify-otp?email=${encodeURIComponent(formData.email)}`);

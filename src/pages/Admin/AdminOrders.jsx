@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { collection, getDocs, doc, updateDoc, query, orderBy, getDoc } from 'firebase/firestore';
+import { collection, doc, updateDoc, query, orderBy, getDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../../firebase';
-import { Package, CheckCircle, Clock, Bell, Users, AlertCircle, Search, ChevronDown, ChevronUp, SlidersHorizontal } from 'lucide-react';
+import { Package, CheckCircle, Clock, Bell, Users, AlertCircle, Search, ChevronDown, ChevronUp, SlidersHorizontal, Truck, Link as LinkIcon, Copy } from 'lucide-react';
+import { shipOrder } from '../../utils/orderTrackingService';
 
 function fmt(n) {
   return '₦' + Math.ceil(n).toLocaleString('en-NG');
@@ -15,44 +16,56 @@ export default function AdminOrders() {
   const [newlyCompleted, setNewlyCompleted] = useState(new Set());
   const [userCache, setUserCache] = useState({});
 
-  const fetchOrders = async () => {
-    await Promise.resolve();
+  useEffect(() => {
     setLoading(true);
-    try {
-      const q = query(collection(db, "orders"), orderBy("createdAt", "desc"));
-      const snapshot = await getDocs(q);
-      const ordersData = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-      setOrders(ordersData);
+    const q = query(collection(db, "orders"), orderBy("createdAt", "desc"));
+    const unsubscribe = onSnapshot(q, async (snapshot) => {
+      try {
+        const ordersData = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+        setOrders(ordersData);
 
-      const uniqueUserIds = [...new Set(ordersData.map(o => o.userId).filter(Boolean))];
-      const cache = {};
-      await Promise.all(
-        uniqueUserIds.map(async (uid) => {
-          try {
-            const userSnap = await getDoc(doc(db, "users", uid));
-            if (userSnap.exists()) {
-              cache[uid] = userSnap.data();
+        // Update user cache for any new users
+        const uniqueUserIds = [...new Set(ordersData.map(o => o.userId).filter(Boolean))];
+        const newCache = { ...userCache };
+        let cacheUpdated = false;
+
+        await Promise.all(
+          uniqueUserIds.map(async (uid) => {
+            if (!newCache[uid]) {
+              try {
+                const userSnap = await getDoc(doc(db, "users", uid));
+                if (userSnap.exists()) {
+                  newCache[uid] = userSnap.data();
+                  cacheUpdated = true;
+                }
+              } catch {
+                // silently skip if user doc missing
+              }
             }
-          } catch {
-            // silently skip if user doc missing
-          }
-        })
-      );
-      setUserCache(cache);
-    } catch (err) {
+          })
+        );
+        
+        if (cacheUpdated) {
+          setUserCache(newCache);
+        }
+        setError('');
+      } catch (err) {
+        console.error(err);
+        setError("Failed to process orders data");
+      } finally {
+        setLoading(false);
+      }
+    }, (err) => {
       console.error(err);
       if (err.message && err.message.toLowerCase().includes('offline')) {
         setError("Please check your internet connection and try again.");
       } else {
-        setError("Failed to fetch orders");
+        setError("Failed to sync orders");
       }
-    } finally {
       setLoading(false);
-    }
-  };
+    });
 
-  useEffect(() => {
-    fetchOrders();
+    return () => unsubscribe();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -71,10 +84,25 @@ export default function AdminOrders() {
       }
 
       await updateDoc(orderRef, updates);
-      setOrders(orders.map(o => o.id === orderId ? { ...o, ...updates } : o));
+      // Local setOrders update removed since onSnapshot handles it
     } catch (err) {
       console.error(err);
       alert("Failed to update payment amount");
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  const handleShipOrder = async (orderId, customerEmail) => {
+    if (!window.confirm("Are you sure you want to mark this order as Shipped? This will generate a rider token and start the delivery timer.")) return;
+    setUpdating(true);
+    try {
+      const { tracking_status, delivery_token } = await shipOrder(orderId, customerEmail);
+      // Local setOrders update removed since onSnapshot handles it
+      alert("Order marked as Shipped! Rider token generated.");
+    } catch (err) {
+      console.error(err);
+      alert("Failed to ship order: " + err.message);
     } finally {
       setUpdating(false);
     }
@@ -403,8 +431,43 @@ export default function AdminOrders() {
                       </div>
 
                       {order.amountPaid >= order.totalAmount && (
-                        <div className="bg-green-50 text-green-700 border border-green-200 px-4 py-3 rounded-sm text-xs font-bold flex items-center justify-center gap-2 uppercase tracking-wider">
-                          <CheckCircle size={16} className="text-green-500" /> Payment Complete
+                        <div className="bg-green-50 text-green-700 border border-green-200 px-4 py-3 rounded-sm text-xs font-bold flex flex-col items-center justify-center gap-2 uppercase tracking-wider mb-4">
+                          <div className="flex items-center gap-2"><CheckCircle size={16} className="text-green-500" /> Payment Complete</div>
+                          
+                          {(!order.tracking_status || order.tracking_status === 'Pending') && (
+                            <button 
+                              onClick={() => handleShipOrder(order.id, customer?.email || order.userId)}
+                              disabled={updating}
+                              className="mt-2 w-full bg-brandLime hover:bg-brandLime/80 text-brandDark font-bold py-2 rounded-sm transition-colors flex justify-center items-center gap-2"
+                            >
+                              <Truck size={14} /> Mark as Shipped
+                            </button>
+                          )}
+                        </div>
+                      )}
+
+                      {order.tracking_status === 'Shipped' && order.delivery_token && (
+                        <div className="bg-blue-50 border border-blue-200 p-3 rounded-sm mt-4">
+                          <div className="text-[10px] font-bold text-blue-800 uppercase tracking-widest mb-1 flex items-center gap-1"><LinkIcon size={12}/> Rider Delivery Link</div>
+                          <div className="flex items-center gap-2 bg-white border border-blue-100 p-2 rounded-sm">
+                            <input 
+                              type="text" 
+                              readOnly 
+                              value={`${window.location.origin}/delivery?order=${order.id}&token=${order.delivery_token}`}
+                              className="text-xs text-gray-600 w-full outline-none bg-transparent"
+                            />
+                            <button 
+                              onClick={() => {
+                                navigator.clipboard.writeText(`${window.location.origin}/delivery?order=${order.id}&token=${order.delivery_token}`);
+                                alert('Link copied to clipboard!');
+                              }}
+                              className="text-blue-600 hover:text-blue-800 p-1"
+                              title="Copy Link"
+                            >
+                              <Copy size={14} />
+                            </button>
+                          </div>
+                          <div className="text-[10px] text-blue-600 mt-1 font-medium">Share this link securely with the delivery rider.</div>
                         </div>
                       )}
 

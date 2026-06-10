@@ -27,6 +27,13 @@ export default function Login() {
       
       if (userDocSnap.exists()) {
         const userData = userDocSnap.data();
+        
+        if (userData.isAdmin) {
+          toast.success('Welcome back, Admin!');
+          navigate('/admin');
+          return;
+        }
+
         if (userData.isEmailVerified === false) {
           await auth.signOut();
           setError('Please verify your email before logging in.');

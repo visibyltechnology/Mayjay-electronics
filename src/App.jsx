@@ -3,6 +3,8 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import Navbar from './components/Navbar';
 import useAuthStore from './store/useAuthStore';
 import { Toaster } from 'react-hot-toast';
+import ScrollToTop from './components/ScrollToTop';
+import ReturnToTopButton from './components/ReturnToTopButton';
 import './index.css';
 
 // Lazy load pages for performance
@@ -12,14 +14,19 @@ const ProductDetail = lazy(() => import('./pages/ProductDetail'));
 const Login         = lazy(() => import('./pages/Login'));
 const Register      = lazy(() => import('./pages/Register'));
 const VerifyOTP     = lazy(() => import('./pages/VerifyOTP'));
+const ForgotPassword= lazy(() => import('./pages/ForgotPassword'));
+const ResetPassword = lazy(() => import('./pages/ResetPassword'));
 const Profile       = lazy(() => import('./pages/Profile'));
 const Cart          = lazy(() => import('./pages/Cart'));
 const Notifications = lazy(() => import('./pages/Notifications'));
 const DeliveryPortal= lazy(() => import('./pages/DeliveryPortal'));
+const Terms          = lazy(() => import('./pages/Terms'));
+const PrivacyPolicy  = lazy(() => import('./pages/PrivacyPolicy'));
 
-// Admin pages
 const AdminLayout      = lazy(() => import('./pages/Admin/AdminLayout'));
 const ProductManager   = lazy(() => import('./pages/Admin/ProductManager'));
+const CategoryManager  = lazy(() => import('./pages/Admin/CategoryManager'));
+const BrandManager     = lazy(() => import('./pages/Admin/BrandManager'));
 const ProductForm      = lazy(() => import('./pages/Admin/ProductForm'));
 const AdminOrders      = lazy(() => import('./pages/Admin/AdminOrders'));
 const SiteSettings     = lazy(() => import('./pages/Admin/SiteSettings'));
@@ -189,6 +196,8 @@ function App() {
 
   return (
     <Router>
+      <ScrollToTop />
+      <ReturnToTopButton />
       <Navbar />
       <Toaster
         position="top-center"
@@ -221,14 +230,19 @@ function App() {
           <Route path="/login"          element={<Login />} />
           <Route path="/register"       element={<Register />} />
           <Route path="/verify-otp"     element={<VerifyOTP />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password"  element={<ResetPassword />} />
           <Route path="/profile"        element={user ? <Profile /> : <Navigate to="/login" />} />
           <Route path="/cart"           element={<Cart />} />
           <Route path="/notifications"  element={user ? <Notifications /> : <Navigate to="/login" />} />
           <Route path="/delivery"       element={<DeliveryPortal />} />
+          <Route path="/terms"          element={<Terms />} />
+          <Route path="/privacy"        element={<PrivacyPolicy />} />
 
-          {/* Admin Routes */}
           <Route path="/admin" element={<AdminLayout />}>
             <Route index              element={<ProductManager />} />
+            <Route path="categories"  element={<CategoryManager />} />
+            <Route path="brands"      element={<BrandManager />} />
             <Route path="new"         element={<ProductForm />} />
             <Route path="edit/:id"    element={<ProductForm />} />
             <Route path="orders"      element={<AdminOrders />} />

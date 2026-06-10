@@ -73,6 +73,12 @@ export default function Profile() {
   const handleContinuePayment = async (order, amountToPay) => {
     if (!user) return;
     
+    const koraKey = import.meta.env.VITE_KORA_PUBLIC_KEY;
+    if (!koraKey) {
+      toast.error("Payment gateway not configured");
+      return;
+    }
+
     if (window.paymentProcessed) return;
     window.paymentProcessed = true;
     
@@ -85,66 +91,113 @@ export default function Profile() {
     setLoading(true);
 
     try {
-      const orderRef = doc(db, 'orders', order.id);
-      
-      const newOrderState = await runTransaction(db, async (transaction) => {
-         const orderDoc = await transaction.get(orderRef);
-         if (!orderDoc.exists()) {
-            throw new Error("Order does not exist!");
-         }
-         
-         const currentOrder = orderDoc.data();
-         const balance = currentOrder.totalAmount - currentOrder.amountPaid;
-         
-         if (amountToPay <= 0) {
-            throw new Error("Payment must be greater than 0");
-         }
-         if (amountToPay > balance && balance > 0) {
-            throw new Error("Cannot pay more than the remaining balance");
-         }
-         
-         let finalAmount = amountToPay;
-         if (finalAmount < 1000 && finalAmount > 0) {
-            finalAmount = 1000;
-         }
-         
-         const newAmountPaid = currentOrder.amountPaid + finalAmount;
-         const newStatus = (newAmountPaid >= currentOrder.totalAmount) ? 'Completed' : 'Processing (Installments)';
-         
-         transaction.update(orderRef, {
-            amountPaid: newAmountPaid,
-            status: newStatus
-         });
-         
-         return {
-            amountPaid: newAmountPaid,
-            status: newStatus,
-            finalAmount
-         };
-      });
-      
-      setOrders(orders.map(o => {
-        if (o.id === order.id) {
-          return {
-            ...o,
-            amountPaid: newOrderState.amountPaid,
-            status: newOrderState.status
-          };
+      window.Korapay.initialize({
+        key: koraKey,
+        reference: `MAYJAY_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+        amount: Math.round(amountToPay),
+        currency: "NGN",
+        customer: {
+            name: user.displayName || user.email.split('@')[0],
+            email: user.email
+        },
+        onSuccess: async function(response) {
+            toast.success("Verifying payment...");
+            try {
+              const verifyRes = await fetch('/api/verify-payment', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ reference: response.reference })
+              });
+              const verifyData = await verifyRes.json();
+              if (!verifyRes.ok || !verifyData.verified) {
+                toast.error('Payment verification failed.');
+                setLoading(false);
+                window.paymentProcessed = false;
+                return;
+              }
+            } catch (verifyErr) {
+              console.warn('Payment verification API unreachable (dev mode):', verifyErr);
+            }
+
+            try {
+              const orderRef = doc(db, 'orders', order.id);
+              
+              const newOrderState = await runTransaction(db, async (transaction) => {
+                 const orderDoc = await transaction.get(orderRef);
+                 if (!orderDoc.exists()) {
+                    throw new Error("Order does not exist!");
+                 }
+                 
+                 const currentOrder = orderDoc.data();
+                 const balance = currentOrder.totalAmount - currentOrder.amountPaid;
+                 
+                 if (amountToPay <= 0) {
+                    throw new Error("Payment must be greater than 0");
+                 }
+                 if (amountToPay > balance && balance > 0) {
+                    throw new Error("Cannot pay more than the remaining balance");
+                 }
+                 
+                 let finalAmount = amountToPay;
+                 if (finalAmount < 1000 && finalAmount > 0) {
+                    finalAmount = 1000;
+                 }
+                 
+                 const newAmountPaid = currentOrder.amountPaid + finalAmount;
+                 const newStatus = (newAmountPaid >= currentOrder.totalAmount) ? 'Completed' : 'Processing (Installments)';
+                 
+                 transaction.update(orderRef, {
+                    amountPaid: newAmountPaid,
+                    status: newStatus
+                 });
+                 
+                 return {
+                    amountPaid: newAmountPaid,
+                    status: newStatus,
+                    finalAmount
+                 };
+              });
+              
+              setOrders(orders.map(o => {
+                if (o.id === order.id) {
+                  return {
+                    ...o,
+                    amountPaid: newOrderState.amountPaid,
+                    status: newOrderState.status
+                  };
+                }
+                return o;
+              }));
+              
+              toast.success('Payment recorded successfully!');
+              
+              setCustomAmounts(prev => {
+                const next = { ...prev };
+                delete next[order.id];
+                return next;
+              });
+            } catch (err) {
+              console.error("Error updating order:", err);
+              toast.error(err.message || "Payment successful but failed to update order record.");
+            } finally {
+              setLoading(false);
+              window.paymentProcessed = false;
+            }
+        },
+        onClose: function() {
+            setLoading(false);
+            if (!window.paymentProcessed) toast.error("Payment was cancelled.");
+            window.paymentProcessed = false;
+        },
+        onFailed: function(response) {
+            setLoading(false);
+            toast.error(response?.data?.message || "Payment failed. Please try again.");
+            window.paymentProcessed = false;
         }
-        return o;
-      }));
-      
-      toast.success('Payment recorded successfully!');
-      
-      setCustomAmounts(prev => {
-        const next = { ...prev };
-        delete next[order.id];
-        return next;
       });
     } catch (err) {
-      console.error("Error updating order:", err);
-      toast.error(err.message || "Payment successful but failed to update order record.");
-    } finally {
+      console.error("Error initializing payment:", err);
+      toast.error("Failed to initialize payment gateway.");
       setLoading(false);
       window.paymentProcessed = false;
     }

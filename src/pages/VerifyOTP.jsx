@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate, Link } from 'react-router-dom';
-import { collection, query, where, getDocs, updateDoc, doc, getDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, updateDoc, doc, getDoc, addDoc } from 'firebase/firestore';
 import { db, auth } from '../firebase';
+import { hashOTP, verifyOTPHash } from '../utils/otpService';
 import emailjs from '@emailjs/browser';
 import toast from 'react-hot-toast';
 import Footer from '../components/Footer';
@@ -124,7 +125,15 @@ export default function VerifyOTP() {
       const userDoc = querySnapshot.docs[0];
       const userData = userDoc.data();
 
-      if (userData.otpCode !== enteredCode) {
+      // Check if it's the hashed version or plaintext (backward compatibility)
+      let isValid = false;
+      if (userData.otpCodeHash) {
+        isValid = await verifyOTPHash(enteredCode, userData.otpCodeHash);
+      } else {
+        isValid = userData.otpCode === enteredCode;
+      }
+
+      if (!isValid) {
         setError('Invalid OTP code.');
         toast.error('Invalid OTP code.');
         setLoading(false);
@@ -144,6 +153,7 @@ export default function VerifyOTP() {
       // Valid OTP
       await updateDoc(doc(db, 'users', userDoc.id), {
         isEmailVerified: true,
+        otpCodeHash: null,
         otpCode: null,
         otpExpiresAt: null
       });
@@ -184,26 +194,50 @@ export default function VerifyOTP() {
       }
 
       const newOtpCode = Math.floor(100000 + Math.random() * 900000).toString();
+      const newOtpCodeHash = await hashOTP(newOtpCode);
       const newExpiresAt = new Date(Date.now() + 15 * 60 * 1000);
 
       await updateDoc(doc(db, 'users', userDoc.id), {
-        otpCode: newOtpCode,
+        otpCodeHash: newOtpCodeHash,
         otpExpiresAt: newExpiresAt
       });
 
-      await emailjs.send(
-        'service_mcu3hnj',
-        'template_643qpnq',
-        {
-          email: email,
-          name: userData.firstName || 'Customer',
-          otp: newOtpCode,
-          code: newOtpCode
-        },
-        'A7Sq--0D6K2sijujF'
-      );
+      // Send via WhatsApp first (if phone exists)
+      if (userData.phone) {
+        try {
+          await addDoc(collection(db, 'otp_requests'), {
+            phone: userData.phone,
+            otpCode: newOtpCode,
+            status: 'pending',
+            createdAt: new Date()
+          });
+        } catch (waErr) {
+          console.error('WhatsApp resend error:', waErr);
+        }
+      }
 
-      toast.success('A new OTP has been sent to your email.');
+      try {
+        await emailjs.send(
+          'service_mcu3hnj',
+          'template_643qpnq',
+          {
+            email: email,
+            to_email: email,
+            name: userData.firstName || 'Customer',
+            otp: newOtpCode,
+            code: newOtpCode
+          },
+          'A7Sq--0D6K2sijujF'
+        );
+        toast.success('A new OTP has been sent to your email and WhatsApp.');
+      } catch (emailErr) {
+        console.error('EmailJS resend error:', emailErr);
+        toast.error(`Email send failed: ${emailErr?.text || emailErr?.message || 'Unknown error'}`);
+        if (userData.phone) {
+          toast('Check your WhatsApp for the code.', { icon: '📱' });
+        }
+      }
+
       setOtp(['', '', '', '', '', '']);
       setTimeLeft(15 * 60); // Reset timer to 15 mins locally
     } catch (err) {

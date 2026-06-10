@@ -1,7 +1,7 @@
 import { doc, updateDoc, getDoc, Timestamp, addDoc, collection } from 'firebase/firestore';
 import { db } from '../firebase';
 import { generateDeliveryOTP } from './otpService';
-import { createOrderOTPNotification } from './notificationService';
+import { createOrderOTPNotification, createTrackingUpdateNotification } from './notificationService';
 
 /**
  * Order Tracking Service
@@ -83,6 +83,16 @@ export const updateOrderStatus = async (orderId, newStatus, notes = '') => {
       status_history: statusHistory,
       updated_at: Timestamp.now()
     });
+
+    try {
+      const orderData = orderSnap.data();
+      const userId = orderData.userId || orderData.user_id;
+      if (userId) {
+        await createTrackingUpdateNotification(userId, orderId, newStatus, notes);
+      }
+    } catch (notifErr) {
+      console.error('Failed to create tracking update notification:', notifErr);
+    }
   } catch (error) {
     console.error('Error updating order status:', error);
     throw error;
@@ -107,9 +117,10 @@ export const shipOrder = async (orderId, deliveryEmail) => {
       `Order shipped. Delivery OTP sent to ${deliveryEmail}`
     );
 
-    // Update order with delivery token
+    // Update order with OTP (in production, hash the OTP)
     const orderRef = doc(db, 'orders', orderId);
     await updateDoc(orderRef, {
+      delivery_otp: otp, // In production, store hashed OTP only
       delivery_token: generateDeliveryToken(orderId),
       updated_at: Timestamp.now()
     });

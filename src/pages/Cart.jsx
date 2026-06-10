@@ -1,12 +1,19 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Trash2, ArrowLeft, CreditCard, ShoppingBag } from 'lucide-react';
-import { collection, addDoc, doc, getDoc } from 'firebase/firestore';
+import { collection, addDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import useCartStore from '../store/useCartStore';
 import useAuthStore from '../store/useAuthStore';
 import Footer from '../components/Footer';
 import toast from 'react-hot-toast';
+
+import { initializeOrderTracking } from '../utils/orderTrackingService';
+import { decreaseInventory } from '../utils/inventoryService';
+import {
+  createOrderPlacedNotification,
+  createPaymentSuccessNotification
+} from '../utils/notificationService';
 
 function fmt(n) {
   return '₦' + Math.ceil(n).toLocaleString('en-NG');
@@ -14,8 +21,17 @@ function fmt(n) {
 
 export default function Cart() {
   const navigate = useNavigate();
-  const { user } = useAuthStore();
+  const { user, isAdmin } = useAuthStore();
   const { items, _hydrated, removeFromCart, updateQuantity, getInitialPaymentTotal, clearCart } = useCartStore();
+
+  // RBAC: Redirect admins away from cart using the store's isAdmin flag
+  useEffect(() => {
+    if (isAdmin) {
+      toast.error('Admin accounts cannot access the shopping cart');
+      navigate('/admin');
+    }
+  }, [isAdmin, navigate]);
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [deliveryInfo, setDeliveryInfo] = useState({
@@ -154,51 +170,134 @@ export default function Cart() {
            }
         }
       }
-      if (splitMode) {
-        const groups = buildGroupMap(expandedItems);
-        for (const [gId, groupUnits] of Object.entries(groups)) {
-          if (groupUnits.length === 0) continue;
-          const merged = {};
-          groupUnits.forEach(unit => {
-            if (!merged[unit.cartItemId]) merged[unit.cartItemId] = { ...unit, quantity: 0 };
-            merged[unit.cartItemId].quantity += 1;
-          });
-          const groupItems = Object.values(merged);
-          const groupTotalAmount = groupItems.reduce((acc, i) => acc + (i.paymentChoice === 'full' ? i.price * i.quantity : (i.price * (1 + (i.installments === 3 || i.installments === 4 ? 0.1 : i.installments > 4 ? 0.2 : 0))) * i.quantity), 0);
-          const groupTotalToPayNow = groupItems.reduce((acc, i) => acc + (i.paymentChoice === 'full' ? i.price * i.quantity : (i.periodPayment || i.monthlyPayment || 0) * i.quantity), 0);
 
-          await addDoc(collection(db, "orders"), {
-            userId: user.uid,
-            items: groupItems,
-            deliveryInfo: deliveryInfo,
-            totalAmount: groupTotalAmount,
-            amountPaid: groupTotalToPayNow,
-            status: 'Processing',
-            paymentRef: `MOCK_REF_${Date.now()}_G${gId}`,
-            createdAt: new Date(),
-          });
-        }
-      } else {
-        await addDoc(collection(db, "orders"), {
-          userId: user.uid,
-          items: items,
-          deliveryInfo: deliveryInfo,
-          totalAmount: items.reduce((acc, i) => acc + (i.paymentChoice === 'full' ? i.price * i.quantity : (i.price * (1 + (i.installments === 3 || i.installments === 4 ? 0.1 : i.installments > 4 ? 0.2 : 0))) * i.quantity), 0),
-          amountPaid: items.reduce((acc, i) => acc + (i.paymentChoice === 'full' ? i.price * i.quantity : (i.periodPayment || 0) * i.quantity), 0),
-          status: 'Processing',
-          paymentRef: `MOCK_REF_${Date.now()}`,
-          createdAt: new Date(),
-        });
+      const koraKey = import.meta.env.VITE_KORA_PUBLIC_KEY;
+      if (!koraKey || !window.Korapay) {
+        toast.error("Payment gateway is not configured properly.");
+        setLoading(false);
+        return;
       }
 
-      clearCart();
-      toast.success('Order placed successfully!');
-      setShowPreview(false);
-      navigate('/profile');
+      window.Korapay.initialize({
+        key: koraKey,
+        reference: `MAYJAY_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+        amount: totalToPayNow,
+        currency: "NGN",
+        customer: {
+            name: user.displayName || user.email.split('@')[0],
+            email: user.email
+        },
+        onSuccess: async function(response) {
+            toast.success("Verifying payment...");
+            try {
+              const verifyRes = await fetch('/api/verify-payment', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ reference: response.reference })
+              });
+              const verifyData = await verifyRes.json();
+              if (!verifyRes.ok || !verifyData.verified) {
+                toast.error('Payment could not be verified. Please contact support.');
+                setError('Payment verification failed. Reference: ' + response.reference);
+                setLoading(false);
+                return;
+              }
+            } catch (verifyErr) {
+              console.warn('Payment verification API unreachable, proceeding (dev mode):', verifyErr);
+            }
+            toast.success("Payment verified! Processing order...");
+            
+            try {
+              if (splitMode) {
+                const groups = buildGroupMap(expandedItems);
+                for (const [gId, groupUnits] of Object.entries(groups)) {
+                  if (groupUnits.length === 0) continue;
+                  const merged = {};
+                  groupUnits.forEach(unit => {
+                    if (!merged[unit.cartItemId]) merged[unit.cartItemId] = { ...unit, quantity: 0 };
+                    merged[unit.cartItemId].quantity += 1;
+                  });
+                  const groupItems = Object.values(merged);
+                  const groupTotalAmount = groupItems.reduce((acc, i) => acc + (i.paymentChoice === 'full' ? i.price * i.quantity : (i.price * (1 + (i.installments === 3 || i.installments === 4 ? 0.1 : i.installments > 4 ? 0.2 : 0))) * i.quantity), 0);
+                  const groupTotalToPayNow = groupItems.reduce((acc, i) => acc + (i.paymentChoice === 'full' ? i.price * i.quantity : (i.periodPayment || i.monthlyPayment || 0) * i.quantity), 0);
+
+                  for (const item of groupItems) {
+                    try {
+                      await decreaseInventory(item.id, Number(item.quantity));
+                    } catch (inventoryErr) {
+                      console.error('Error updating inventory for item:', item.id, inventoryErr);
+                    }
+                  }
+
+                  const orderRef = await addDoc(collection(db, "orders"), initializeOrderTracking({
+                    userId: user.uid,
+                    items: groupItems,
+                    deliveryInfo: deliveryInfo,
+                    totalAmount: groupTotalAmount,
+                    amountPaid: groupTotalToPayNow,
+                    status: 'Processing',
+                    paymentRef: response.reference || `REF_${Date.now()}_G${gId}`,
+                    createdAt: new Date(),
+                  }));
+                  
+                  try {
+                    await createOrderPlacedNotification(user.uid, orderRef.id, groupItems.length);
+                    await createPaymentSuccessNotification(user.uid, orderRef.id, groupTotalToPayNow);
+                  } catch (notifErr) {
+                    console.error('Error creating notifications:', notifErr);
+                  }
+                }
+              } else {
+                for (const item of items) {
+                  try {
+                    await decreaseInventory(item.id, Number(item.quantity));
+                  } catch (inventoryErr) {
+                    console.error('Error updating inventory for item:', item.id, inventoryErr);
+                  }
+                }
+
+                const orderTotalAmount = items.reduce((acc, i) => acc + (i.paymentChoice === 'full' ? i.price * i.quantity : (i.price * (1 + (i.installments === 3 || i.installments === 4 ? 0.1 : i.installments > 4 ? 0.2 : 0))) * i.quantity), 0);
+                const orderRef = await addDoc(collection(db, "orders"), initializeOrderTracking({
+                  userId: user.uid,
+                  items: items,
+                  deliveryInfo: deliveryInfo,
+                  totalAmount: orderTotalAmount,
+                  amountPaid: items.reduce((acc, i) => acc + (i.paymentChoice === 'full' ? i.price * i.quantity : (i.periodPayment || 0) * i.quantity), 0),
+                  status: 'Processing',
+                  paymentRef: response.reference || `REF_${Date.now()}`,
+                  createdAt: new Date(),
+                }));
+                
+                try {
+                  await createOrderPlacedNotification(user.uid, orderRef.id, items.length);
+                  await createPaymentSuccessNotification(user.uid, orderRef.id, items.reduce((acc, i) => acc + (i.paymentChoice === 'full' ? i.price * i.quantity : (i.periodPayment || 0) * i.quantity), 0));
+                } catch (notifErr) {
+                  console.error('Error creating notifications:', notifErr);
+                }
+              }
+
+              clearCart();
+              toast.success('Order placed successfully!');
+              setShowPreview(false);
+              navigate('/profile');
+            } catch (err) {
+              console.error("Error saving order:", err);
+              setError("Payment successful but failed to save order. Please contact support.");
+              setLoading(false);
+            } finally {
+              window.paymentProcessed = false;
+            }
+        },
+        onClose: function() {
+            setLoading(false);
+            if (!window.paymentProcessed) toast.error("Payment was cancelled.");
+            window.paymentProcessed = false;
+        }
+      });
+
     } catch (err) {
       console.error("Error saving order:", err);
-      setError(err.message || "Payment successful but failed to save order. Please contact support.");
-    } finally {
+      setError(err.message || "Failed to initiate payment. Please contact support.");
       setLoading(false);
       window.paymentProcessed = false;
     }

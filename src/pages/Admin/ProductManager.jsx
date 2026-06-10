@@ -1,28 +1,31 @@
 import { useState, useEffect } from 'react';
-import { collection, getDocs, deleteDoc, doc, updateDoc } from 'firebase/firestore';
+import { collection, deleteDoc, doc, updateDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { Link } from 'react-router-dom';
 import {
   Edit, Trash2, PlusCircle, Package, Star, Search,
-  SlidersHorizontal, Ruler, BadgePercent, ArrowUpDown
+  SlidersHorizontal, Ruler, BadgePercent, ArrowUpDown, Eye, EyeOff
 } from 'lucide-react';
+import { CATEGORY_STYLES, getDefaultStyle } from '../../utils/categoryService';
 
-const CATEGORY_STYLES = {
-  'Air Conditioners':  { bg: '#eff6ff', text: '#3b82f6', border: '#bfdbfe', dot: '#3b82f6', glow: 'rgba(59,130,246,0.15)' },
-  'Televisions':     { bg: '#f3f0ff', text: '#7c3aed', border: '#ddd6fe', dot: '#7c3aed', glow: 'rgba(124,58,237,0.15)' },
-  'Washing Machines': { bg: '#fdf2f8', text: '#db2777', border: '#fbcfe8', dot: '#db2777', glow: 'rgba(219,39,119,0.15)' },
-  'Refrigerators': { bg: '#fffbeb', text: '#d97706', border: '#fde68a', dot: '#d97706', glow: 'rgba(217,119,6,0.15)' },
-  'Generators': { bg: '#ecfdf5', text: '#059669', border: '#a7f3d0', dot: '#059669', glow: 'rgba(5,150,105,0.15)' },
-  'Phones': { bg: '#ecf9ff', text: '#0891b2', border: '#a5f3fc', dot: '#0891b2', glow: 'rgba(6,182,212,0.15)' },
-  'Laptops': { bg: '#f3e8ff', text: '#a855f7', border: '#e9d5ff', dot: '#a855f7', glow: 'rgba(168,85,247,0.15)' },
-  'Audio': { bg: '#ffe2e6', text: '#f43f5e', border: '#ffbdc7', dot: '#f43f5e', glow: 'rgba(244,63,94,0.15)' },
-  'Gaming': { bg: '#fff7ed', text: '#fb923c', border: '#fed7aa', dot: '#fb923c', glow: 'rgba(251,146,60,0.15)' },
-};
-
-const defaultCat = { bg: '#f3f4f6', text: '#374151', border: '#e5e7eb', dot: '#6b7280', glow: 'rgba(0,0,0,0.08)' };
+function normalizeBrand(brand) {
+  if (!brand) return '';
+  const b = brand.trim().toLowerCase();
+  if (b.includes('hisense')) return 'Hisense';
+  if (b.includes('tcl')) return 'TCL';
+  if (b.includes('lg')) return 'LG';
+  if (b.includes('samsung')) return 'Samsung';
+  if (b.includes('royal')) return 'Royal';
+  if (b.includes('thermocool') || b.includes('haier')) return 'Thermocool';
+  if (b.includes('panasonic')) return 'Panasonic';
+  if (b.includes('apple') || b.includes('iphone')) return 'Apple';
+  if (b.includes('sony')) return 'Sony';
+  if (b.includes('hp')) return 'HP';
+  return brand.trim().split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+}
 
 function CategoryBadge({ category }) {
-  const s = CATEGORY_STYLES[category] || defaultCat;
+  const s = CATEGORY_STYLES[category] || getDefaultStyle();
   return (
     <span style={{
       display: 'inline-flex', alignItems: 'center', gap: 5,
@@ -36,9 +39,9 @@ function CategoryBadge({ category }) {
   );
 }
 
-function ProductCard({ product, onDelete, onFeaturedToggle }) {
+function ProductCard({ product, onDelete, onFeaturedToggle, onHiddenToggle }) {
   const [hovered, setHovered] = useState(false);
-  const catStyle = CATEGORY_STYLES[product.category] || defaultCat;
+  const catStyle = CATEGORY_STYLES[product.category] || getDefaultStyle();
   const hasSale = product.pss && Number(product.pss) > 0 && Number(product.pss) < Number(product.price);
   const discount = hasSale
     ? Math.round(100 - (Number(product.pss) / Number(product.price)) * 100)
@@ -89,6 +92,28 @@ function ProductCard({ product, onDelete, onFeaturedToggle }) {
           -{discount}% OFF
         </div>
       )}
+
+      {/* Hidden / Out of Stock Badges */}
+      <div style={{ position: 'absolute', bottom: 12, left: 12, zIndex: 2, display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {product.is_hidden && (
+          <div style={{
+            background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)',
+            color: '#fff', fontSize: 9, fontWeight: 800,
+            padding: '4px 8px', borderRadius: 6, letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: 4
+          }}>
+            <EyeOff size={10} /> HIDDEN
+          </div>
+        )}
+        {product.inventory_status === 'out_of_stock' && (
+          <div style={{
+            background: 'rgba(220,38,38,0.9)', backdropFilter: 'blur(4px)',
+            color: '#fff', fontSize: 9, fontWeight: 800,
+            padding: '4px 8px', borderRadius: 6, letterSpacing: '0.05em'
+          }}>
+            OUT OF STOCK
+          </div>
+        )}
+      </div>
 
       {/* Image */}
       <div style={{
@@ -227,6 +252,22 @@ function ProductCard({ product, onDelete, onFeaturedToggle }) {
            )}
          </button>
          <button
+           onClick={() => onHiddenToggle(product.id, product.is_hidden)}
+           style={{
+             display: 'flex', alignItems: 'center', justifyContent: 'center',
+             width: 32, height: 32, borderRadius: 10, flexShrink: 0,
+             background: product.is_hidden ? '#fef2f2' : '#fff',
+             color: product.is_hidden ? '#dc2626' : '#6b7280',
+             border: `1.5px solid ${product.is_hidden ? '#fecaca' : '#e5e7eb'}`,
+             cursor: 'pointer', transition: 'all 0.2s',
+           }}
+           title={product.is_hidden ? "Unhide Product" : "Hide Product"}
+           onMouseEnter={e => { e.currentTarget.style.borderColor = '#9ca3af'; }}
+           onMouseLeave={e => { e.currentTarget.style.borderColor = product.is_hidden ? '#fecaca' : '#e5e7eb'; }}
+         >
+           {product.is_hidden ? <EyeOff size={14} /> : <Eye size={14} />}
+         </button>
+         <button
            onClick={() => onDelete(product.id)}
            style={{
              flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
@@ -252,23 +293,23 @@ export default function ProductManager() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filterCat, setFilterCat] = useState('All');
+  const [filterBrand, setFilterBrand] = useState('All');
   const [sortBy, setSortBy] = useState('newest');
 
-  const fetchProducts = async () => {
+  useEffect(() => {
     setLoading(true);
-    try {
-      const querySnapshot = await getDocs(collection(db, 'products'));
+    const unsubscribe = onSnapshot(collection(db, 'products'), (querySnapshot) => {
       const items = [];
       querySnapshot.forEach((d) => items.push({ id: d.id, ...d.data() }));
       setProducts(items);
-    } catch (error) {
-      console.error('Error fetching products:', error);
-    } finally {
       setLoading(false);
-    }
-  };
+    }, (error) => {
+      console.error('Error syncing products:', error);
+      setLoading(false);
+    });
 
-  useEffect(() => { fetchProducts(); }, []);
+    return () => unsubscribe();
+  }, []);
 
    const handleDelete = async (id) => {
      const product = products.find(p => p.id === id);
@@ -285,10 +326,9 @@ export default function ProductManager() {
      message += `Price: ₦${Number(product.price).toLocaleString()}\n\n`;
      message += 'This action cannot be undone.';
 
-     if (window.confirm(message)) {
+      if (window.confirm(message)) {
        try {
          await deleteDoc(doc(db, 'products', id));
-         setProducts(prev => prev.filter(p => p.id !== id));
        } catch (error) {
          console.error('Error deleting product:', error);
          alert('Failed to delete product. Please try again.');
@@ -299,10 +339,18 @@ export default function ProductManager() {
    const handleUpdateProduct = async (id, updates) => {
      try {
        await updateDoc(doc(db, 'products', id), updates);
-       setProducts(prev => prev.map(p => p.id === id ? {...p, ...updates} : p));
      } catch (error) {
        console.error('Error updating product:', error);
        alert('Failed to update product. Please try again.');
+     }
+   };
+
+   const handleHiddenToggle = async (productId, currentStatus) => {
+     try {
+       await updateDoc(doc(db, 'products', productId), { is_hidden: !currentStatus });
+     } catch (error) {
+       console.error('Error toggling visibility:', error);
+       alert('Failed to toggle product visibility.');
      }
    };
 
@@ -354,9 +402,6 @@ export default function ProductManager() {
              featured: true,
              featuredPosition: pos
            });
-           setProducts(prev => prev.map(p => 
-             p.id === productId ? {...p, featured: true, featuredPosition: pos} : p
-           ));
          } catch (error) {
            console.error('Error featuring product:', error);
            alert('Failed to update product. Please try again.');
@@ -365,14 +410,28 @@ export default function ProductManager() {
      }
    };
 
+   const brandSet = ['All', ...Array.from(new Set(products.map(p => normalizeBrand(p.brand)).filter(Boolean))).sort()];
+
    // Filter & sort
   const filtered = products
     .filter(p => {
-      const matchSearch = p.name?.toLowerCase().includes(search.toLowerCase());
-      const matchCat = filterCat === 'All' || p.category === filterCat;
-      return matchSearch && matchCat;
+      const q = search.toLowerCase();
+      const pBrand = normalizeBrand(p.brand);
+      const matchSearch = !q ||
+        (p.name || '').toLowerCase().includes(q) ||
+        pBrand.toLowerCase().includes(q) ||
+        (p.category || '').toLowerCase().includes(q) ||
+        (p.tag || '').toLowerCase().includes(q);
+      const matchCat = filterCat === 'All' ? true : (filterCat === 'Featured' ? p.featured : p.category === filterCat);
+      const matchBrand = filterBrand === 'All' || pBrand === filterBrand;
+      return matchSearch && matchCat && matchBrand;
     })
     .sort((a, b) => {
+      if (filterCat === 'Featured') {
+        const posA = a.featuredPosition ?? Infinity;
+        const posB = b.featuredPosition ?? Infinity;
+        return posA - posB;
+      }
       if (sortBy === 'price-asc') return Number(a.price) - Number(b.price);
       if (sortBy === 'price-desc') return Number(b.price) - Number(a.price);
       if (sortBy === 'name') return (a.name || '').localeCompare(b.name || '');
@@ -469,9 +528,10 @@ export default function ProductManager() {
         </div>
 
         {/* Category filter */}
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', width: '100%' }}>
           <SlidersHorizontal size={15} style={{ color: '#9ca3af', alignSelf: 'center' }} />
-          {['All', ...Object.keys(CATEGORY_STYLES)].map(cat => {
+          <span style={{ fontSize: 10, fontWeight: 800, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.08em', alignSelf: 'center' }}>Category:</span>
+          {['All', 'Featured', ...Object.keys(CATEGORY_STYLES)].map(cat => {
             const s = cat === 'All' ? null : CATEGORY_STYLES[cat];
             const active = filterCat === cat;
             return (
@@ -492,6 +552,27 @@ export default function ProductManager() {
               </button>
             );
           })}
+        </div>
+
+        {/* Brand filter */}
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', width: '100%', borderTop: '1px solid #f3f4f6', paddingTop: 12 }}>
+          <span style={{ fontSize: 10, fontWeight: 800, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.08em', alignSelf: 'center', marginRight: 2 }}>Brand:</span>
+          {brandSet.map(brand => (
+            <button
+              key={brand}
+              onClick={() => setFilterBrand(brand)}
+              style={{
+                padding: '5px 12px', borderRadius: 99, border: '1.5px solid',
+                fontSize: 11, fontWeight: 800, cursor: 'pointer',
+                letterSpacing: '0.05em', transition: 'all 0.15s',
+                background: filterBrand === brand ? '#10b981' : '#f3f4f6',
+                borderColor: filterBrand === brand ? '#059669' : '#e5e7eb',
+                color: filterBrand === brand ? '#fff' : '#6b7280',
+              }}
+            >
+              {brand}
+            </button>
+          ))}
         </div>
 
         {/* Sort */}
@@ -549,7 +630,7 @@ export default function ProductManager() {
             gap: 20
           }}>
        {filtered.map(product => (
-         <ProductCard key={product.id} product={product} onDelete={handleDelete} onFeaturedToggle={handleFeaturedToggle} />
+         <ProductCard key={product.id} product={product} onDelete={handleDelete} onFeaturedToggle={handleFeaturedToggle} onHiddenToggle={handleHiddenToggle} />
        ))}
           </div>
         </>

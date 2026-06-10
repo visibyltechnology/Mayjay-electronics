@@ -1,14 +1,24 @@
 import { Navigate, Outlet, NavLink } from 'react-router-dom';
 import useAuthStore from '../../store/useAuthStore';
-import { Package, PlusCircle, LogOut, User, ClipboardList, Settings, Menu, X } from 'lucide-react';
+import { Package, PlusCircle, LogOut, User, ClipboardList, Settings, Menu, X, Tag, Briefcase } from 'lucide-react';
 import { auth } from '../../firebase';
 import { signOut } from 'firebase/auth';
 import toast from 'react-hot-toast';
 import { useState } from 'react';
 
 export default function AdminLayout() {
-  const { user, isAdmin } = useAuthStore();
+  const { user, isAdmin, loading } = useAuthStore();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  // Wait for auth + Firestore fetch to complete before making access decision
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-950 flex items-center justify-center">
+        <div style={{ width: 44, height: 44, border: '3px solid #1e293b', borderTopColor: '#a3e635', borderRadius: '50%', animation: 'spin 0.75s linear infinite' }} />
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      </div>
+    );
+  }
 
   if (!user || !isAdmin) {
     return <Navigate to="/login" replace />;
@@ -16,6 +26,8 @@ export default function AdminLayout() {
 
   const navLinks = [
     { to: "/admin", icon: <Package size={18} />, label: "Manage Products", end: true },
+    { to: "/admin/categories", icon: <Tag size={18} />, label: "Manage Categories" },
+    { to: "/admin/brands", icon: <Briefcase size={18} />, label: "Manage Brands" },
     { to: "/admin/orders", icon: <ClipboardList size={18} />, label: "Customer Orders" },
     { to: "/admin/new", icon: <PlusCircle size={18} />, label: "Add Product" },
     { to: "/admin/settings", icon: <Settings size={18} />, label: "Site Settings" },

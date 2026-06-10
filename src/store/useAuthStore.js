@@ -1,7 +1,6 @@
 import { create } from 'zustand';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
-import { auth, db } from '../firebase';
+import { auth } from '../firebase';
 
 const useAuthStore = create((set) => ({
   user: null,
@@ -9,23 +8,25 @@ const useAuthStore = create((set) => ({
   loading: true,
   init: () => {
     onAuthStateChanged(auth, async (user) => {
-      let isAdmin = false;
-      if (user) {
-        try {
-          const userDoc = await getDoc(doc(db, 'users', user.uid));
-          if (userDoc.exists() && userDoc.data().role === 'admin') {
-            isAdmin = true;
-          }
-        } catch (e) {
-          console.error("Error fetching user role:", e);
-        }
+      if (!user) {
+        // Logged out — resolve immediately
+        set({ user: null, isAdmin: false, loading: false });
+        return;
       }
-      
-      set({ 
-        user, 
-        isAdmin,
-        loading: false 
-      });
+
+      // User present — mark as loading while we fetch admin status from Firestore
+      set({ user, isAdmin: false, loading: true });
+
+      try {
+        const { doc, getDoc } = await import('firebase/firestore');
+        const { db } = await import('../firebase');
+        const userDoc = await getDoc(doc(db, 'users', user.uid));
+        const isAdmin = userDoc.exists() ? userDoc.data().isAdmin === true : false;
+        set({ isAdmin, loading: false });
+      } catch (err) {
+        console.error('Failed to fetch admin status:', err);
+        set({ isAdmin: false, loading: false });
+      }
     });
   },
   logout: async () => {

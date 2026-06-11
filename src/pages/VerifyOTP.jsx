@@ -3,7 +3,7 @@ import { useSearchParams, useNavigate, Link } from 'react-router-dom';
 import { collection, query, where, getDocs, updateDoc, doc, addDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { hashOTP, verifyOTPHash } from '../utils/otpService';
-import emailjs from '@emailjs/browser';
+import { sendRegistrationOTPEmail } from '../utils/email';
 import toast from 'react-hot-toast';
 import Footer from '../components/Footer';
 
@@ -246,22 +246,22 @@ export default function VerifyOTP() {
       }
 
       try {
-        await emailjs.send(
-          'service_mcu3hnj',
-          'template_643qpnq',
-          {
-            email: email,
-            to_email: email,
-            name: currentData.firstName || 'Customer',
-            otp: newOtpCode,
-            code: newOtpCode
-          },
-          'A7Sq--0D6K2sijujF'
+        const sent = await sendRegistrationOTPEmail(
+          email,
+          currentData.firstName || 'Customer',
+          newOtpCode
         );
-        toast.success('A new OTP has been sent to your email.');
+        if (sent) {
+          toast.success('A new OTP has been sent to your email.');
+        } else {
+          toast.error('Failed to send OTP email. Check your inbox or try again.');
+          if (currentData.phone) {
+            toast('Check your WhatsApp for the code.', { icon: '📱' });
+          }
+        }
       } catch (emailErr) {
-        console.error('EmailJS resend error:', emailErr);
-        toast.error(`Email send failed: ${emailErr?.text || emailErr?.message || 'Unknown error'}`);
+        console.error('Email resend error:', emailErr);
+        toast.error('Failed to send OTP email.');
         if (currentData.phone) {
           toast('Check your WhatsApp for the code.', { icon: '📱' });
         }

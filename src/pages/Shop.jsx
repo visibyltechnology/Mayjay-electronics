@@ -357,7 +357,7 @@ export default function Shop() {
                     </div>
 
                     {loading ? (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6 sm:gap-8">
+                        <div className="grid grid-cols-3 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 sm:gap-6 lg:gap-8">
                             {[1, 2, 3, 4, 5, 6].map(i => (
                                 <div key={i} className="bg-white p-4 rounded-xl shadow-md border border-gray-100 h-96 animate-pulse flex flex-col justify-between">
                                     <div className="w-full h-56 bg-gray-100 rounded-lg mb-4"></div>
@@ -386,7 +386,7 @@ export default function Shop() {
                             </button>
                         </div>
                     ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6 sm:gap-8">
+                        <div className="grid grid-cols-3 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 sm:gap-6 lg:gap-8">
                             {currentItems.map((p, idx) => {
                                 const inStock = isProductInStock(p);
                                 return (
@@ -412,30 +412,30 @@ export default function Shop() {
                                         <button onClick={e => e.stopPropagation()} className="w-9 h-9 bg-white/90 backdrop-blur rounded-xl text-brandDark hover:text-brandLime hover:bg-brandDark shadow-lg flex items-center justify-center transition-all"><i className="fa-solid fa-code-compare"></i></button>
                                     </div>
                                     
-                                    <div className="relative h-56 bg-gradient-to-b from-gray-50 to-gray-100 flex items-center justify-center p-6 group-hover:bg-gray-50 transition-colors duration-500">
+                                    <div className="relative h-32 sm:h-56 bg-gradient-to-b from-gray-50 to-gray-100 flex items-center justify-center p-2 sm:p-6 group-hover:bg-gray-50 transition-colors duration-500">
                                         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-brandLime/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
                                         <img src={p.img || p.images?.[0] || 'https://via.placeholder.com/150'} alt={p.name} className="max-w-full max-h-full object-contain group-hover:scale-110 transition-transform duration-500 relative z-10 drop-shadow-sm" />
                                     </div>
                                     
-                                    <div className="p-6 flex flex-col flex-grow bg-white relative z-20">
-                                        <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1">
+                                    <div className="p-2 sm:p-6 flex flex-col flex-grow bg-white relative z-20">
+                                        <p className="hidden sm:block text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1">
                                             {normalizeBrand(p.brand) || 'Official Partner'}
                                         </p>
-                                        <h3 className="text-base font-black text-brandDark mb-2 leading-tight group-hover:text-brandLime transition-colors duration-300 line-clamp-2 min-h-[44px]">
+                                        <h3 className="text-[11px] sm:text-base font-black text-brandDark mb-1 sm:mb-2 leading-tight group-hover:text-brandLime transition-colors duration-300 line-clamp-2 min-h-[28px] sm:min-h-[44px]">
                                             {p.name}
                                         </h3>
                                         
-                                        {/* Star Rating */}
-                                        <div className="mb-3">
+                                        {/* Star Rating - hidden on mobile */}
+                                        <div className="hidden sm:block mb-3">
                                             <StarRating
                                                 rating={p.averageRating || p.rating || 0}
                                                 count={p.reviewCount || p.numReviews || 0}
                                             />
                                         </div>
                                         
-                                        <div className="mt-auto pt-4 border-t border-gray-100">
-                                            {/* Inventory Status */}
-                                            <div className="mb-2">
+                                        <div className="mt-auto pt-2 sm:pt-4 border-t border-gray-100">
+                                            {/* Inventory Status - hidden on mobile */}
+                                            <div className="hidden sm:block mb-2">
                                                 {inStock ? (
                                                     <span className="inline-flex items-center gap-1 text-green-600 text-[10px] font-black uppercase tracking-widest">
                                                         <i className="fas fa-check-circle"></i> {getStockDisplayText(p)}
@@ -447,12 +447,12 @@ export default function Shop() {
                                                 )}
                                             </div>
 
-                                            <div className="flex items-end space-x-2 mb-4">
-                                                <span className="text-2xl font-black text-brandDark tracking-tight">
+                                            <div className="flex items-end space-x-1 sm:space-x-2 mb-2 sm:mb-4">
+                                                <span className="text-sm sm:text-2xl font-black text-brandDark tracking-tight">
                                                     ₦{Number(p.pss && p.pss > 0 ? p.pss : p.price).toLocaleString()}
                                                 </span>
                                                 {p.pss && p.pss > 0 && Number(p.pss) < Number(p.price) && (
-                                                    <span className="text-sm text-gray-400 line-through font-bold mb-1">
+                                                    <span className="hidden sm:inline text-sm text-gray-400 line-through font-bold mb-1">
                                                         ₦{Number(p.price).toLocaleString()}
                                                     </span>
                                                 )}
@@ -461,11 +461,12 @@ export default function Shop() {
                                             <button 
                                                 onClick={(e) => { e.stopPropagation(); navigate(`/products/${p.id}`); }}
                                                 disabled={!inStock}
-                                                className={`w-full ${inStock ? 'bg-brandDark text-white hover:bg-brandLime hover:text-brandBlack shadow-md hover:shadow-brandLime/20' : 'bg-gray-100 text-gray-400 cursor-not-allowed border-2 border-gray-200'} font-bold text-sm py-3.5 rounded-xl transition-all duration-300 flex items-center justify-center space-x-2 overflow-hidden relative group/btn`}
+                                                className={`w-full ${inStock ? 'bg-brandDark text-white hover:bg-brandLime hover:text-brandBlack shadow-md hover:shadow-brandLime/20' : 'bg-gray-100 text-gray-400 cursor-not-allowed border-2 border-gray-200'} font-bold text-[10px] sm:text-sm py-2 sm:py-3.5 rounded-lg sm:rounded-xl transition-all duration-300 flex items-center justify-center space-x-1 sm:space-x-2 overflow-hidden relative group/btn`}
                                             >
-                                                <span className="relative z-10 flex items-center space-x-2">
+                                                <span className="relative z-10 flex items-center space-x-1 sm:space-x-2">
                                                     <i className={`fa-solid fa-cart-shopping ${inStock ? 'transition-transform group-hover/btn:-translate-y-1' : ''}`}></i>
-                                                    <span>{inStock ? 'Add to Cart' : 'Out of Stock'}</span>
+                                                    <span className="hidden sm:inline">{inStock ? 'Add to Cart' : 'Out of Stock'}</span>
+                                                    <span className="sm:hidden">{inStock ? 'Buy' : 'N/A'}</span>
                                                 </span>
                                             </button>
                                         </div>

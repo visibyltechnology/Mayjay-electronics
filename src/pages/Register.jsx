@@ -63,7 +63,7 @@ export default function Register() {
       const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
       const otpExpiresAt = new Date(Date.now() + 15 * 60 * 1000);
 
-      await auth.signOut();
+
 
       await setDoc(doc(db, "users", user.uid), {
         firstName: formData.firstName,
@@ -85,6 +85,7 @@ export default function Register() {
       }
 
       setSuccessMessage('Account created successfully!');
+      await auth.signOut();
       setShowOtpModal(true);
     } catch (err) {
       console.error("Registration error full details:", err);

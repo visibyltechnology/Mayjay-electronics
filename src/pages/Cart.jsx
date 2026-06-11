@@ -463,7 +463,7 @@ export default function Cart() {
                           </div>
                         ) : (
                           <span className="inline-block bg-brandLime/20 text-brandDark border border-brandLime/40 text-[10px] font-black px-2.5 py-1 rounded-md uppercase tracking-widest w-max">
-                            {item.paymentFrequency === 'weekly' ? item.installments * 4 + ' Weekly Payments' : item.installments + ' Monthly Payments'}
+                            {item.paymentFrequency === 'weekly' ? item.installments + ' Weekly Payments' : item.installments + ' Monthly Payments'}
                           </span>
                         )
                       ) : (

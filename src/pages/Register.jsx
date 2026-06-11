@@ -2,10 +2,10 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { auth, db } from '../firebase';
-import { collection, query, where, getDocs, updateDoc, doc, setDoc } from 'firebase/firestore';
+import { collection, doc, setDoc } from 'firebase/firestore';
 import Footer from '../components/Footer';
 import LegalModal from '../components/LegalModal';
-import { Eye, EyeOff, CheckCircle, UserPlus, Lock } from 'lucide-react';
+import { Eye, EyeOff, CheckCircle, UserPlus } from 'lucide-react';
 import { sendRegistrationOTPEmail } from '../utils/email';
 import toast from 'react-hot-toast';
 
@@ -24,10 +24,6 @@ export default function Register() {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-
-  // OTP Modal State
-  const [showOtpModal, setShowOtpModal] = useState(false);
-  const [otp, setOtp] = useState(['', '', '', '', '', '']);
 
   // Legal terms state
   const [agreedToTerms, setAgreedToTerms] = useState(false);
@@ -103,60 +99,6 @@ export default function Register() {
         setError(`Failed to register: ${err.message}`);
         toast.error(`Error: ${err.message}`);
       }
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleOtpChange = (element, index) => {
-    if (isNaN(element.value)) return false;
-    setOtp([...otp.map((d, idx) => (idx === index ? element.value : d))]);
-    if (element.nextSibling && element.value) {
-      element.nextSibling.focus();
-    }
-  };
-
-  const handleOtpKeyDown = (e, index) => {
-    if (e.key === 'Backspace' && !otp[index] && e.target.previousSibling) {
-      e.target.previousSibling.focus();
-    }
-  };
-
-  const handleVerifyOtpInline = async (e) => {
-    e.preventDefault();
-    const enteredCode = otp.join('');
-    if (enteredCode.length !== 6) {
-      toast.error('Please enter the 6-digit code.');
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const q = query(collection(db, 'users'), where('email', '==', formData.email));
-      const snap = await getDocs(q);
-      if (snap.empty) throw new Error('User not found.');
-      
-      const userDoc = snap.docs[0];
-      const userData = userDoc.data();
-      
-      if (userData.otpCode !== enteredCode) {
-        toast.error('Invalid OTP code.');
-        setLoading(false);
-        return;
-      }
-      
-      await updateDoc(doc(db, 'users', userDoc.id), {
-        isEmailVerified: true,
-        otpCode: null,
-        otpExpiresAt: null
-      });
-      
-      toast.success('Email successfully verified!');
-      setShowOtpModal(false);
-      navigate('/login');
-    } catch (err) {
-      console.error(err);
-      toast.error(err.message || 'Verification failed.');
     } finally {
       setLoading(false);
     }
@@ -417,58 +359,6 @@ export default function Register() {
             if (type === 'privacy') setAgreedToPrivacy(true);
           }}
         />
-      )}
-
-      {/* OTP Confirmation Modal */}
-      {showOtpModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8 relative animate-fade-in-up">
-            <button 
-              onClick={() => { setShowOtpModal(false); navigate('/login'); }}
-              className="absolute top-4 right-4 text-gray-400 hover:text-brandDark"
-            >
-              <i className="fas fa-times text-xl"></i>
-            </button>
-            <div className="text-center mb-6">
-              <div className="w-16 h-16 bg-brandLime/20 text-brandGreen rounded-full flex items-center justify-center mx-auto mb-4">
-                <i className="fas fa-envelope-open-text text-2xl"></i>
-              </div>
-              <h2 className="text-2xl font-black text-brandDark uppercase tracking-wide">Verify Email</h2>
-              <p className="text-sm text-gray-500 mt-2">
-                We sent a 6-digit code to <strong className="text-brandDark">{formData.email}</strong>
-              </p>
-            </div>
-            
-            <form onSubmit={handleVerifyOtpInline}>
-              <div className="flex justify-center gap-2 mb-8">
-                {otp.map((data, index) => (
-                  <input
-                    key={index}
-                    type="text"
-                    maxLength="1"
-                    value={data}
-                    onChange={(e) => handleOtpChange(e.target, index)}
-                    onKeyDown={(e) => handleOtpKeyDown(e, index)}
-                    onFocus={(e) => e.target.select()}
-                    className="w-10 h-12 sm:w-12 sm:h-14 text-xl sm:text-2xl text-center border-2 border-gray-200 focus:border-brandLime outline-none rounded-lg font-black bg-gray-50 focus:bg-white text-brandDark transition-all shadow-sm"
-                  />
-                ))}
-              </div>
-
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full bg-brandLime hover:bg-white border-2 border-transparent hover:border-brandLime disabled:opacity-60 text-brandBlack font-black py-4 rounded-xl uppercase tracking-widest text-sm transition-all flex items-center justify-center gap-3 shadow-md hover:shadow-lg transform hover:-translate-y-0.5"
-              >
-                {loading ? (
-                  <><i className="fas fa-spinner fa-spin"></i> Verifying...</>
-                ) : (
-                  <><i className="fas fa-check-circle"></i> Verify My Account</>
-                )}
-              </button>
-            </form>
-          </div>
-        </div>
       )}
     </main>
   );

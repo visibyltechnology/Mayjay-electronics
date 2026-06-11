@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate, Link } from 'react-router-dom';
-import { collection, query, where, getDocs, updateDoc, doc, getDoc, addDoc } from 'firebase/firestore';
-import { db, auth } from '../firebase';
+import { collection, query, where, getDocs, updateDoc, doc, addDoc } from 'firebase/firestore';
+import { db } from '../firebase';
 import { hashOTP, verifyOTPHash } from '../utils/otpService';
 import emailjs from '@emailjs/browser';
 import toast from 'react-hot-toast';
@@ -16,20 +16,9 @@ export default function VerifyOTP() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [resending, setResending] = useState(false);
+  const [isPageLoading, setIsPageLoading] = useState(true);
 
   const [timeLeft, setTimeLeft] = useState(null);
-
-  const getUserDoc = async () => {
-    if (auth.currentUser?.uid) {
-      const userRef = doc(db, 'users', auth.currentUser.uid);
-      const userSnap = await getDoc(userRef);
-      if (userSnap.exists() && userSnap.data().email === email) {
-        return { empty: false, docs: [userSnap] };
-      }
-    }
-    const q = query(collection(db, 'users'), where('email', '==', email));
-    return await getDocs(q);
-  };
 
   useEffect(() => {
     if (!email) {
@@ -38,35 +27,52 @@ export default function VerifyOTP() {
     }
 
     let interval;
-    const fetchTimer = async () => {
+    const initTimer = async () => {
+      setIsPageLoading(true);
       try {
-        const querySnapshot = await getUserDoc();
-        if (!querySnapshot.empty) {
-          const userData = querySnapshot.docs[0].data();
-          if (userData.otpExpiresAt) {
-            const expiresAt = userData.otpExpiresAt.toDate().getTime();
-            
-            const updateTimer = () => {
-              const now = Date.now();
-              const difference = expiresAt - now;
-              if (difference > 0) {
-                setTimeLeft(Math.floor(difference / 1000));
-              } else {
-                setTimeLeft(0);
-                clearInterval(interval);
-              }
-            };
-            
-            updateTimer();
-            interval = setInterval(updateTimer, 1000);
-          }
+        const q = query(collection(db, 'users'), where('email', '==', email));
+        const snap = await getDocs(q);
+        
+        if (snap.empty) {
+          toast.error('User not found.');
+          navigate('/login');
+          return;
+        }
+        
+        const userData = snap.docs[0].data();
+        
+        if (userData.isEmailVerified) {
+          toast.success('Email is already verified.');
+          navigate('/login');
+          return;
+        }
+
+        if (userData.otpExpiresAt) {
+          const expiresAt = userData.otpExpiresAt.toDate().getTime();
+          const updateTimer = () => {
+            const now = Date.now();
+            const diff = expiresAt - now;
+            if (diff > 0) {
+              setTimeLeft(Math.floor(diff / 1000));
+            } else {
+              setTimeLeft(0);
+              clearInterval(interval);
+            }
+          };
+          updateTimer();
+          interval = setInterval(updateTimer, 1000);
+        } else {
+          setTimeLeft(0);
         }
       } catch (err) {
-        console.error("Failed to fetch timer:", err);
+        console.error("Failed to fetch user data:", err);
+        setError("Failed to load user details.");
+      } finally {
+        setIsPageLoading(false);
       }
     };
 
-    fetchTimer();
+    initTimer();
 
     return () => {
       if (interval) clearInterval(interval);
@@ -74,7 +80,7 @@ export default function VerifyOTP() {
   }, [email, navigate]);
 
   const formatTime = (seconds) => {
-    if (seconds === null) return '';
+    if (seconds === null) return '--:--';
     if (seconds === 0) return 'Code Expired';
     const m = Math.floor(seconds / 60);
     const s = seconds % 60;
@@ -83,8 +89,9 @@ export default function VerifyOTP() {
 
   const handleChange = (element, index) => {
     if (isNaN(element.value)) return false;
-
-    setOtp([...otp.map((d, idx) => (idx === index ? element.value : d))]);
+    const newOtp = [...otp];
+    newOtp[index] = element.value;
+    setOtp(newOtp);
 
     // Focus next input
     if (element.nextSibling && element.value) {
@@ -93,11 +100,30 @@ export default function VerifyOTP() {
   };
 
   const handleKeyDown = (e, index) => {
-    if (e.key === 'Backspace') {
-      if (!otp[index] && e.target.previousSibling) {
-        e.target.previousSibling.focus();
-      }
+    if (e.key === 'Backspace' && !otp[index] && e.target.previousSibling) {
+      e.target.previousSibling.focus();
     }
+  };
+
+  const handlePaste = (e) => {
+    e.preventDefault();
+    const pastedData = e.clipboardData.getData('text/plain').replace(/\D/g, '').slice(0, 6);
+    if (!pastedData) return;
+
+    const newOtp = [...otp];
+    for (let i = 0; i < pastedData.length; i++) {
+      if (i < 6) newOtp[i] = pastedData[i];
+    }
+    setOtp(newOtp);
+    
+    // Focus the next empty input or the last one
+    setTimeout(() => {
+      const inputs = document.querySelectorAll('.otp-input');
+      const nextIndex = Math.min(pastedData.length, 5);
+      if (inputs[nextIndex]) {
+        inputs[nextIndex].focus();
+      }
+    }, 0);
   };
 
   const verifyOTP = async (e) => {
@@ -109,28 +135,32 @@ export default function VerifyOTP() {
       return;
     }
 
+    if (timeLeft === 0) {
+      setError('OTP has expired. Please request a new one.');
+      toast.error('OTP has expired.');
+      return;
+    }
+
     setLoading(true);
     setError('');
 
     try {
-      const querySnapshot = await getUserDoc();
-
-      if (querySnapshot.empty) {
-        setError('User not found.');
-        toast.error('User not found.');
-        setLoading(false);
-        return;
+      // Re-fetch to ensure we have the latest hash and it hasn't been reset
+      const q = query(collection(db, 'users'), where('email', '==', email));
+      const snap = await getDocs(q);
+      
+      if (snap.empty) {
+        throw new Error('User not found.');
       }
 
-      const userDoc = querySnapshot.docs[0];
-      const userData = userDoc.data();
+      const currentData = snap.docs[0].data();
+      const currentDocId = snap.docs[0].id;
 
-      // Check if it's the hashed version or plaintext (backward compatibility)
       let isValid = false;
-      if (userData.otpCodeHash) {
-        isValid = await verifyOTPHash(enteredCode, userData.otpCodeHash);
-      } else {
-        isValid = userData.otpCode === enteredCode;
+      if (currentData.otpCodeHash) {
+        isValid = await verifyOTPHash(enteredCode, currentData.otpCodeHash);
+      } else if (currentData.otpCode) {
+        isValid = currentData.otpCode === enteredCode;
       }
 
       if (!isValid) {
@@ -141,7 +171,7 @@ export default function VerifyOTP() {
       }
 
       const now = new Date();
-      const expiresAt = userData.otpExpiresAt?.toDate();
+      const expiresAt = currentData.otpExpiresAt?.toDate();
 
       if (!expiresAt || now > expiresAt) {
         setError('OTP has expired. Please request a new one.');
@@ -150,8 +180,7 @@ export default function VerifyOTP() {
         return;
       }
 
-      // Valid OTP
-      await updateDoc(doc(db, 'users', userDoc.id), {
+      await updateDoc(doc(db, 'users', currentDocId), {
         isEmailVerified: true,
         otpCodeHash: null,
         otpCode: null,
@@ -175,19 +204,20 @@ export default function VerifyOTP() {
     setError('');
     
     try {
-      const querySnapshot = await getUserDoc();
+      const q = query(collection(db, 'users'), where('email', '==', email));
+      const snap = await getDocs(q);
 
-      if (querySnapshot.empty) {
+      if (snap.empty) {
         setError('User not found.');
         toast.error('User not found.');
         setResending(false);
         return;
       }
 
-      const userDoc = querySnapshot.docs[0];
-      const userData = userDoc.data();
+      const userDoc = snap.docs[0];
+      const currentData = userDoc.data();
 
-      if (userData.isEmailVerified) {
+      if (currentData.isEmailVerified) {
         toast.success('Email is already verified.');
         navigate('/login');
         return;
@@ -202,11 +232,10 @@ export default function VerifyOTP() {
         otpExpiresAt: newExpiresAt
       });
 
-      // Send via WhatsApp first (if phone exists)
-      if (userData.phone) {
+      if (currentData.phone) {
         try {
           await addDoc(collection(db, 'otp_requests'), {
-            phone: userData.phone,
+            phone: currentData.phone,
             otpCode: newOtpCode,
             status: 'pending',
             createdAt: new Date()
@@ -223,23 +252,24 @@ export default function VerifyOTP() {
           {
             email: email,
             to_email: email,
-            name: userData.firstName || 'Customer',
+            name: currentData.firstName || 'Customer',
             otp: newOtpCode,
             code: newOtpCode
           },
           'A7Sq--0D6K2sijujF'
         );
-        toast.success('A new OTP has been sent to your email and WhatsApp.');
+        toast.success('A new OTP has been sent to your email.');
       } catch (emailErr) {
         console.error('EmailJS resend error:', emailErr);
         toast.error(`Email send failed: ${emailErr?.text || emailErr?.message || 'Unknown error'}`);
-        if (userData.phone) {
+        if (currentData.phone) {
           toast('Check your WhatsApp for the code.', { icon: '📱' });
         }
       }
 
       setOtp(['', '', '', '', '', '']);
-      setTimeLeft(15 * 60); // Reset timer to 15 mins locally
+      setTimeLeft(15 * 60);
+      setError('');
     } catch (err) {
       console.error(err);
       setError('Failed to resend OTP. Please try again later.');
@@ -284,11 +314,9 @@ export default function VerifyOTP() {
                 </div>
               )}
 
-              {timeLeft !== null && (
-                <div className={`mb-6 font-black text-xl tracking-wider ${timeLeft === 0 ? 'text-red-500' : 'text-brandDark'}`}>
-                  {formatTime(timeLeft)}
-                </div>
-              )}
+              <div className={`mb-6 font-black text-xl tracking-wider transition-opacity duration-300 ${isPageLoading ? 'opacity-50' : 'opacity-100'} ${timeLeft === 0 ? 'text-red-500' : 'text-brandDark'}`}>
+                {isPageLoading ? 'Loading timer...' : formatTime(timeLeft)}
+              </div>
 
               <form onSubmit={verifyOTP}>
                 <div className="flex justify-center gap-2 sm:gap-3 mb-8">
@@ -300,13 +328,15 @@ export default function VerifyOTP() {
                       value={data}
                       onChange={(e) => handleChange(e.target, index)}
                       onKeyDown={(e) => handleKeyDown(e, index)}
+                      onPaste={index === 0 ? handlePaste : undefined}
                       onFocus={(e) => e.target.select()}
-                      className="w-10 h-12 sm:w-12 sm:h-14 text-xl sm:text-2xl text-center border-2 border-gray-200 focus:border-brandLime outline-none rounded-lg font-black bg-gray-50 focus:bg-white text-brandDark transition-all shadow-sm"
+                      className="otp-input w-10 h-12 sm:w-12 sm:h-14 text-xl sm:text-2xl text-center border-2 border-gray-200 focus:border-brandLime outline-none rounded-lg font-black bg-gray-50 focus:bg-white text-brandDark transition-all shadow-sm disabled:opacity-50 disabled:bg-gray-100"
+                      disabled={isPageLoading}
                     />
                   ))}
                 </div>
 
-                <button type="submit" disabled={loading} className="w-full bg-brandLime hover:bg-white border-2 border-transparent hover:border-brandLime disabled:opacity-60 text-brandBlack font-black py-4 rounded-xl uppercase tracking-widest text-sm transition-all flex items-center justify-center gap-3 shadow-md hover:shadow-lg transform hover:-translate-y-0.5">
+                <button type="submit" disabled={loading || isPageLoading} className="w-full bg-brandLime hover:bg-white border-2 border-transparent hover:border-brandLime disabled:opacity-60 text-brandBlack font-black py-4 rounded-xl uppercase tracking-widest text-sm transition-all flex items-center justify-center gap-3 shadow-md hover:shadow-lg transform hover:-translate-y-0.5">
                   {loading ? (
                     <><i className="fas fa-spinner fa-spin"></i> Verifying...</>
                   ) : (
@@ -320,7 +350,7 @@ export default function VerifyOTP() {
                   Didn't receive the code?{' '}
                   <button 
                     onClick={handleResend} 
-                    disabled={resending}
+                    disabled={resending || isPageLoading}
                     className="text-brandDark font-black hover:text-brandLime transition-colors disabled:opacity-50 underline"
                   >
                     {resending ? 'Sending...' : 'Resend Code'}

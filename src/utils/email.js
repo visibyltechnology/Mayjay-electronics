@@ -37,27 +37,27 @@ import { db } from '../firebase';
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 // Default EmailJS credentials (used for OTPs)
-const DEFAULT_SERVICE_ID = 'service_4qwypyf';
-const DEFAULT_PUBLIC_KEY = 'CWdxDP7npAJ5fJzA1';
+const DEFAULT_SERVICE_ID = 'service_i3z9bcn';
+const DEFAULT_PUBLIC_KEY = 'ow1HqhoLp_AmYw9qO';
 
-// Gmail Service credentials (used for order tracking templates)
-const GMAIL_SERVICE_ID = 'service_abqszhq';
-const GMAIL_PUBLIC_KEY = 'iUd8NC1BGbaD1T4hq';
+// Gmail Service credentials (used for specific order templates)
+const GMAIL_SERVICE_ID = 'service_i3z9bcn';
+const GMAIL_PUBLIC_KEY = 'ow1HqhoLp_AmYw9qO';
 
 // Gmail API credentials (used for registration OTP)
 const GMAIL_REG_SERVICE_ID = 'service_go3mq9r';
 const GMAIL_REG_PUBLIC_KEY = 'qMDC3k6-nsYEMhgJP';
 
 // Delivery OTP credentials
-const DELIVERY_SERVICE_ID = 'service_nv1ch5j';
-const DELIVERY_PUBLIC_KEY = '1LlDYBt_Gw6nHuICZ';
+const DELIVERY_SERVICE_ID = 'service_i3z9bcn';
+const DELIVERY_PUBLIC_KEY = 'ow1HqhoLp_AmYw9qO';
 
 export const TEMPLATES = {
-  OTP:             'template_g5muxfu',        // registration OTP (Gmail API)
-  RESET_PASSWORD:  'template_9h43d7l',        // forgot password OTP
-  ORDER_OTP:       'template_6ko8h0t',        // delivery confirmation code
-  TRACKING_UPDATE: 'template_1dl8gfs',        // shipped / status changed
-  ORDER_DELIVERED: 'template_9ton4to',        // delivered confirmation
+  OTP:             'template_g5muxfu',        // registration OTP
+  RESET_PASSWORD:  'template_ekfiipq',        // forgot password OTP
+  ORDER_OTP:       'template_order_otp',      // delivery confirmation code
+  TRACKING_UPDATE: 'template_tracking_update', // shipped / status changed
+  ORDER_DELIVERED: 'template_order_delivered', // delivered confirmation
 };
 
 // ─── Internal helpers ─────────────────────────────────────────────────────────

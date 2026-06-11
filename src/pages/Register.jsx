@@ -77,16 +77,17 @@ export default function Register() {
         createdAt: new Date()
       });
 
-      const emailSent = await sendRegistrationOTPEmail(formData.email, formData.firstName, otpCode);
-      if (!emailSent) {
-        console.warn('OTP email failed to send — user can still verify manually.');
-      } else {
+      try {
+        await sendRegistrationOTPEmail(formData.email, formData.firstName, otpCode);
         toast.success('OTP sent! Check your email inbox (and spam folder).');
+      } catch (emailErr) {
+        console.error("EmailJS error:", emailErr);
+        console.warn('OTP email failed to send — user can still verify manually.');
       }
 
       setSuccessMessage('Account created successfully!');
       await auth.signOut();
-      setShowOtpModal(true);
+      navigate(`/verify-otp?email=${encodeURIComponent(formData.email)}`);
     } catch (err) {
       console.error("Registration error full details:", err);
       if (err.code === 'auth/email-already-in-use') {

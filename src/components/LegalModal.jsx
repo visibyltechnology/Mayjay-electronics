@@ -8,7 +8,7 @@ const TERMS_CONTENT = (
       </p>
     </div>
 
-    <p>Welcome to <strong className="text-gray-900">Mayjay Concepts!</strong> These Terms and Conditions ("Terms") govern your use of our website at <strong>https://www.Mayjay Conceptsworld.com.ng</strong> and the purchase of any electronics or products from us. By accessing the Site or purchasing a product, you agree to be bound by these Terms.</p>
+    <p>Welcome to <strong className="text-gray-900">Mayjay Concepts!</strong> These Terms and Conditions ("Terms") govern your use of our website at <strong>https://www.mayjay-electronics.com.ng</strong> and the purchase of any electronics or products from us. By accessing the Site or purchasing a product, you agree to be bound by these Terms.</p>
 
     {[
       {
@@ -86,7 +86,7 @@ const TERMS_CONTENT = (
         <span className="w-5 h-5 bg-gray-800 text-white rounded-full flex items-center justify-center text-[10px] font-black flex-shrink-0">11</span>
         Contact Information
       </h3>
-      <p>Email: support@Mayjay Conceptsworld.com.ng | Phone: +234 706 651 4355 | Address: 77 Olu-Obasanjo Road Port Harcourt, Nigeria</p>
+      <p>WhatsApp: <a href="https://wa.me/2347066514355" target="_blank" rel="noreferrer">07066514355</a> | Phone: 09116763595 | Address: Shop 3, Aboderin Shopping Complex, beside California Luxury Hotel and Suites, Agbaje-Orita Challenge, Ibadan.</p>
     </div>
 
     <div className="bg-gray-100 border border-gray-200 rounded-sm p-4 text-center">
@@ -118,7 +118,7 @@ const PRIVACY_CONTENT = (
       },
       {
         n: '5', title: 'Your Rights Under Nigerian Law (NDPR)', icon: 'fa-user-shield',
-        body: 'Under the NDPR, you have the right to: request access to the personal data we hold about you, request correction of inaccurate or incomplete data, request erasure of your personal data (subject to legal retention requirements), object to or restrict how we process your data, and lodge a complaint with NITDA if you believe your data rights have been violated. To exercise these rights, contact us at support@Mayjay Conceptsworld.com.ng.'
+        body: 'Under the NDPR, you have the right to: request access to the personal data we hold about you, request correction of inaccurate or incomplete data, request erasure of your personal data (subject to legal retention requirements), object to or restrict how we process your data, and lodge a complaint with NITDA if you believe your data rights have been violated. To exercise these rights, contact us at support@mayjay-electronics.com.ng.'
       },
       {
         n: '6', title: 'Cookies', icon: 'fa-cookie',

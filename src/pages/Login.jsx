@@ -33,12 +33,6 @@ export default function Login() {
           navigate('/admin');
           return;
         }
-
-        if (userData.isEmailVerified === false) {
-          toast('Please verify your email to continue.', { icon: '✉️' });
-          navigate(`/verify-otp?email=${encodeURIComponent(email)}`);
-          return;
-        }
       }
 
       toast.success('Successfully logged in!');

@@ -5,31 +5,8 @@ export default function Footer() {
     const year = new Date().getFullYear();
     const [email, setEmail] = useState('');
     const [isSubscribed, setIsSubscribed] = useState(false);
-    const [selectedHub, setSelectedHub] = useState('ph');
 
-    const hubDetails = {
-        ph: {
-            label: 'Port Harcourt',
-            address: 'Rumuola Road, off Trans-Amadi Industrial Layout, Port Harcourt, Rivers State',
-            phone: '+234 706 651 4355',
-            whatsapp: 'https://wa.me/2347066514355?text=Hi%20Mayjay%20Concepts%20PH%2C%20I%20want%20to%20enquire%20about%20a%20product.',
-            hours: 'Mon–Sat: 8am – 7pm'
-        },
-        lagos: {
-            label: 'Lagos',
-            address: 'Computer Village, Ikeja, Lagos State (by appointment)',
-            phone: '+234 706 651 4355',
-            whatsapp: 'https://wa.me/2347066514355?text=Hi%20Mayjay%20Concepts%20Lagos%2C%20I%20want%20to%20place%20an%20order.',
-            hours: 'Mon–Fri: 9am – 6pm'
-        },
-        abuja: {
-            label: 'Abuja',
-            address: 'Wuse 2, Central Business District, Abuja, FCT (by appointment)',
-            phone: '+234 706 651 4355',
-            whatsapp: 'https://wa.me/2347066514355?text=Hi%20Mayjay%20Concepts%20Abuja%2C%20I%20need%20appliances.',
-            hours: 'Mon–Fri: 9am – 6pm'
-        }
-    };
+    const WHATSAPP_LINK = 'https://wa.me/2347066514355?text=Hi%20Mayjay%20Concepts%2C%20I%20want%20to%20enquire%20about%20a%20product.';
 
     const handleSubscribe = (e) => {
         e.preventDefault();
@@ -98,23 +75,10 @@ export default function Footer() {
                             Nigeria's trusted destination for authentic electronics, smart gadgets, and sustainable solar power solutions. Nationwide delivery guaranteed.
                         </p>
 
-                        {/* Hub Switcher */}
-                        <div className="bg-[#111724] p-1 rounded-xl flex border border-gray-800 max-w-xs mb-6">
-                            {Object.keys(hubDetails).map((hub) => (
-                                <button
-                                    key={hub} type="button"
-                                    onClick={() => setSelectedHub(hub)}
-                                    className={`flex-1 text-center py-2 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all duration-200 ${selectedHub === hub ? 'bg-brandLime text-brandBlack shadow-md' : 'text-gray-500 hover:text-gray-300'}`}
-                                >
-                                    {hubDetails[hub].label}
-                                </button>
-                            ))}
-                        </div>
-
                         {/* Social Bar */}
                         <div className="flex items-center gap-3">
                             {[
-                                { icon: 'fa-whatsapp', href: hubDetails[selectedHub].whatsapp, fab: true },
+                                { icon: 'fa-whatsapp', href: WHATSAPP_LINK, fab: true },
                                 { icon: 'fa-facebook-f', href: '#', fab: true },
                                 { icon: 'fa-instagram', href: '#', fab: true },
                                 { icon: 'fa-tiktok', href: '#', fab: true }
@@ -181,39 +145,44 @@ export default function Footer() {
                         </ul>
                     </div>
 
-                    {/* Interactive Location Desk */}
+                    {/* Location Card */}
                     <div className="lg:col-span-4 bg-[#111724]/60 p-6 rounded-2xl border border-gray-800/70 backdrop-blur-sm self-start">
                         <h4 className="text-white font-black text-xs uppercase tracking-widest mb-4 flex items-center justify-between">
                             <span className="flex items-center gap-2">
                                 <span className="w-1.5 h-3.5 bg-brandLime rounded-full"></span>
-                                Office Hub ({hubDetails[selectedHub].label})
+                                Our Store
                             </span>
                             <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
                         </h4>
 
-                        <div className="space-y-4 min-h-[160px] flex flex-col justify-between">
+                        <div className="space-y-4 flex flex-col justify-between">
                             <div className="space-y-3.5">
                                 <div className="flex items-start gap-3 group">
                                     <div className="w-8 h-8 bg-[#182032] group-hover:bg-brandLime/10 rounded-xl flex items-center justify-center flex-shrink-0 transition-colors">
                                         <i className="fas fa-map-marker-alt text-brandLime text-xs"></i>
                                     </div>
-                                    <p className="text-xs text-gray-400 leading-relaxed font-semibold">{hubDetails[selectedHub].address}</p>
+                                    <p className="text-xs text-gray-400 leading-relaxed font-semibold">Shop 3, Aboderin Shopping Complex, beside California Luxury Hotel and Suites, Agbaje-Orita Challenge, Ibadan.</p>
                                 </div>
-                                <div className="flex items-center gap-3">
+                                <div className="flex items-start gap-3">
                                     <div className="w-8 h-8 bg-[#182032] rounded-xl flex items-center justify-center flex-shrink-0">
-                                        <i className="fas fa-phone text-brandLime text-xs"></i>
+                                        <i className="fab fa-whatsapp text-green-400 text-sm"></i>
                                     </div>
-                                    <span className="text-xs text-gray-400 font-bold tracking-wide">{hubDetails[selectedHub].phone}</span>
+                                    <div className="flex flex-col gap-0.5">
+                                        <a href="https://wa.me/2347066514355" target="_blank" rel="noreferrer" className="text-xs text-green-400 font-bold tracking-wide hover:text-green-300 transition-colors">
+                                            07066514355
+                                        </a>
+                                        <span className="text-xs text-gray-400 font-medium tracking-wide">09116763595</span>
+                                    </div>
                                 </div>
                                 <div className="flex items-center gap-3">
                                     <div className="w-8 h-8 bg-[#182032] rounded-xl flex items-center justify-center flex-shrink-0">
                                         <i className="fas fa-clock text-brandLime text-xs"></i>
                                     </div>
-                                    <span className="text-xs text-gray-400 font-medium">{hubDetails[selectedHub].hours}</span>
+                                    <span className="text-xs text-gray-400 font-medium">Mon–Sat: 8am – 7pm</span>
                                 </div>
                             </div>
-                            <a href={hubDetails[selectedHub].whatsapp} target="_blank" rel="noreferrer"
-                                className="w-full inline-flex items-center justify-center gap-2 bg-green-600 hover:bg-green-500 text-white text-xs font-black uppercase tracking-wider py-3.5 rounded-xl shadow-lg transition-all duration-300 transform hover:-translate-y-0.5">
+                            <a href={WHATSAPP_LINK} target="_blank" rel="noreferrer"
+                                className="w-full inline-flex items-center justify-center gap-2 bg-green-600 hover:bg-green-500 text-white text-xs font-black uppercase tracking-wider py-3.5 rounded-xl shadow-lg transition-all duration-300 transform hover:-translate-y-0.5 mt-4">
                                 <i className="fab fa-whatsapp text-base"></i>
                                 Chat Us on WhatsApp
                             </a>

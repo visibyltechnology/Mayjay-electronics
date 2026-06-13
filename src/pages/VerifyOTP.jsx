@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useSearchParams, useNavigate, Link } from 'react-router-dom';
-import { collection, query, where, getDocs, updateDoc, doc, addDoc } from 'firebase/firestore';
-import { db } from '../firebase';
-import { hashOTP, verifyOTPHash } from '../utils/otpService';
+import { collection, doc, setDoc } from 'firebase/firestore';
+import { db, auth } from '../firebase';
+import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { sendRegistrationOTPEmail } from '../utils/email';
 import toast from 'react-hot-toast';
 import Footer from '../components/Footer';
@@ -46,50 +46,20 @@ export default function VerifyOTP() {
   }, [stopTimer]);
 
   useEffect(() => {
-    if (!email) {
-      navigate('/login');
+    const dataStr = sessionStorage.getItem('pendingRegistration');
+    const otpExpStr = sessionStorage.getItem('otpExpiresAt');
+
+    if (!email || !dataStr || !otpExpStr) {
+      toast.error('Session expired or invalid. Please register again.');
+      navigate('/register');
       return;
     }
 
-    const initTimer = async () => {
-      setIsPageLoading(true);
-      try {
-        const q = query(collection(db, 'users'), where('email', '==', email));
-        const snap = await getDocs(q);
+    const expiresAt = new Date(otpExpStr).getTime();
+    startTimer(expiresAt);
+    setIsPageLoading(false);
 
-        if (snap.empty) {
-          toast.error('User not found.');
-          navigate('/login');
-          return;
-        }
-
-        const userData = snap.docs[0].data();
-
-        if (userData.isEmailVerified) {
-          toast.success('Email is already verified.');
-          navigate('/shop');
-          return;
-        }
-
-        if (userData.otpExpiresAt) {
-          // Firestore Timestamps have .toDate(); plain Dates do not
-          const expiresAt = typeof userData.otpExpiresAt.toDate === 'function'
-            ? userData.otpExpiresAt.toDate().getTime()
-            : new Date(userData.otpExpiresAt).getTime();
-          startTimer(expiresAt);
-        } else {
-          setTimeLeft(0);
-        }
-      } catch (err) {
-        console.error('Failed to fetch user data:', err);
-        setError('Failed to load user details.');
-      } finally {
-        setIsPageLoading(false);
-      }
-    };
-
-    initTimer();
-    return stopTimer; // cleanup clears the interval on unmount
+    return stopTimer;
   }, [email, navigate, startTimer, stopTimer]);
 
   const formatTime = (seconds) => {
@@ -158,55 +128,53 @@ export default function VerifyOTP() {
     setError('');
 
     try {
-      // Re-fetch to ensure we have the latest hash and it hasn't been reset
-      const q = query(collection(db, 'users'), where('email', '==', email));
-      const snap = await getDocs(q);
-      
-      if (snap.empty) {
-        throw new Error('User not found.');
+      const storedOTP = sessionStorage.getItem('registrationOTP');
+      const dataStr = sessionStorage.getItem('pendingRegistration');
+
+      if (!storedOTP || !dataStr) {
+        throw new Error('Session expired. Please register again.');
       }
 
-      const currentData = snap.docs[0].data();
-      const currentDocId = snap.docs[0].id;
-
-      let isValid = false;
-      if (currentData.otpCodeHash) {
-        isValid = await verifyOTPHash(enteredCode, currentData.otpCodeHash);
-      } else if (currentData.otpCode) {
-        isValid = currentData.otpCode === enteredCode;
-      }
-
-      if (!isValid) {
+      if (enteredCode !== storedOTP) {
         setError('Invalid OTP code.');
         toast.error('Invalid OTP code.');
         setLoading(false);
         return;
       }
 
-      const now = new Date();
-      const expiresAt = currentData.otpExpiresAt?.toDate();
+      const pendingData = JSON.parse(dataStr);
 
-      if (!expiresAt || now > expiresAt) {
-        setError('OTP has expired. Please request a new one.');
-        toast.error('OTP has expired.');
-        setLoading(false);
-        return;
-      }
+      // 1. Create Firebase Auth user
+      const userCredential = await createUserWithEmailAndPassword(
+        auth, 
+        pendingData.email, 
+        pendingData.password
+      );
+      const user = userCredential.user;
 
-      await updateDoc(doc(db, 'users', currentDocId), {
+      // 2. Create user document in Firestore, now fully verified
+      await setDoc(doc(db, 'users', user.uid), {
+        firstName: pendingData.firstName,
+        lastName: pendingData.lastName,
+        phone: pendingData.phone,
+        email: pendingData.email,
+        isAdmin: false,
         isEmailVerified: true,
-        otpCodeHash: null,
-        otpCode: null,
-        otpExpiresAt: null
+        createdAt: new Date().toISOString()
       });
 
-      toast.success('Email successfully verified!');
+      // 3. Clear session
+      sessionStorage.removeItem('pendingRegistration');
+      sessionStorage.removeItem('registrationOTP');
+      sessionStorage.removeItem('otpExpiresAt');
+
+      toast.success('Account successfully created and verified!');
       navigate('/shop');
 
     } catch (err) {
       console.error(err);
-      setError('Failed to verify OTP. Please try again.');
-      toast.error('Failed to verify OTP.');
+      setError(err.message || 'Failed to verify OTP. Please try again.');
+      toast.error(err.message || 'Failed to verify OTP.');
     } finally {
       setLoading(false);
     }
@@ -217,71 +185,40 @@ export default function VerifyOTP() {
     setError('');
     
     try {
-      const q = query(collection(db, 'users'), where('email', '==', email));
-      const snap = await getDocs(q);
-
-      if (snap.empty) {
-        setError('User not found.');
-        toast.error('User not found.');
-        setResending(false);
+      const dataStr = sessionStorage.getItem('pendingRegistration');
+      if (!dataStr) {
+        setError('Session expired. Please register again.');
+        toast.error('Session expired. Please register again.');
+        navigate('/register');
         return;
       }
 
-      const userDoc = snap.docs[0];
-      const currentData = userDoc.data();
-
-      if (currentData.isEmailVerified) {
-        toast.success('Email is already verified.');
-        navigate('/shop');
-        return;
-      }
-
+      const pendingData = JSON.parse(dataStr);
       const newOtpCode = Math.floor(100000 + Math.random() * 900000).toString();
-      const newOtpCodeHash = await hashOTP(newOtpCode);
       const newExpiresAt = new Date(Date.now() + 15 * 60 * 1000);
 
-      await updateDoc(doc(db, 'users', userDoc.id), {
-        otpCodeHash: newOtpCodeHash,
-        otpExpiresAt: newExpiresAt
-      });
-
-      if (currentData.phone) {
-        try {
-          await addDoc(collection(db, 'otp_requests'), {
-            phone: currentData.phone,
-            otpCode: newOtpCode,
-            status: 'pending',
-            createdAt: new Date()
-          });
-        } catch (waErr) {
-          console.error('WhatsApp resend error:', waErr);
-        }
-      }
+      // Update session storage
+      sessionStorage.setItem('registrationOTP', newOtpCode);
+      sessionStorage.setItem('otpExpiresAt', newExpiresAt.toISOString());
 
       try {
         const sent = await sendRegistrationOTPEmail(
           email,
-          currentData.firstName || 'Customer',
+          pendingData.firstName || 'Customer',
           newOtpCode
         );
-        if (sent) {
+        if (sent !== false) {
           toast.success('A new OTP has been sent to your email.');
         } else {
-          toast.error('Failed to send OTP email. Check your inbox or try again.');
-          if (currentData.phone) {
-            toast('Check your WhatsApp for the code.', { icon: '📱' });
-          }
+          throw new Error('Email sending returned false');
         }
       } catch (emailErr) {
         console.error('Email resend error:', emailErr);
         toast.error('Failed to send OTP email.');
-        if (currentData.phone) {
-          toast('Check your WhatsApp for the code.', { icon: '📱' });
-        }
       }
 
       setOtp(['', '', '', '', '', '']);
-      startTimer(newExpiresAt.getTime()); // restart the live countdown
+      startTimer(newExpiresAt.getTime());
       setError('');
     } catch (err) {
       console.error(err);

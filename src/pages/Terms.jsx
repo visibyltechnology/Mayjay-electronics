@@ -33,7 +33,7 @@ export default function Terms() {
         <div className="bg-white border border-gray-200 rounded-sm p-6 mb-6 shadow-sm">
           <p className="text-sm text-gray-700 leading-relaxed font-medium">
             Welcome to <strong className="text-gray-900">Mayjay Concepts!</strong> These Terms and Conditions ("Terms") govern your use of our website located at{' '}
-            <a href="https://www.Mayjay Conceptsworld.com.ng" className="text-lime-600 hover:underline font-bold">https://www.Mayjay Conceptsworld.com.ng</a>{' '}
+            <a href="https://www.mayjay-electronics.com.ng" className="text-lime-600 hover:underline font-bold">https://www.mayjay-electronics.com.ng</a>{' '}
             (the "Site") and the purchase of any electronics or products from us.
           </p>
           <p className="text-sm text-gray-700 leading-relaxed font-medium mt-3">
@@ -148,9 +148,8 @@ export default function Terms() {
                 <>
                   <p className="mb-3">If you have any questions or concerns regarding these Terms, please contact us:</p>
                   <ul className="space-y-1.5 text-sm font-medium">
-                    <li><i className="fas fa-envelope mr-2 text-lime-600"></i><strong>Email:</strong> support@Mayjay Conceptsworld.com.ng</li>
-                    <li><i className="fas fa-phone mr-2 text-lime-600"></i><strong>Phone:</strong> +234 706 651 4355</li>
-                    <li><i className="fas fa-map-marker-alt mr-2 text-lime-600"></i><strong>Address:</strong> 77 Olu-Obasanjo Road Port Harcourt, Rivers State, Nigeria</li>
+                    <li><i className="fab fa-whatsapp mr-2 text-green-500"></i><strong>WhatsApp:</strong> <a href="https://wa.me/2347066514355" target="_blank" rel="noreferrer" className="text-green-600 hover:underline font-bold">07066514355</a> | <span className="font-medium">09116763595</span></li>
+                    <li><i className="fas fa-map-marker-alt mr-2 text-lime-600"></i><strong>Address:</strong> Shop 3, Aboderin Shopping Complex, beside California Luxury Hotel and Suites, Agbaje-Orita Challenge, Ibadan.</li>
                   </ul>
                 </>
               )

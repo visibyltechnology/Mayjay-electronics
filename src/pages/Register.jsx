@@ -1,8 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
-import { auth, db } from '../firebase';
-import { collection, doc, setDoc } from 'firebase/firestore';
+import { auth } from '../firebase';
+import { fetchSignInMethodsForEmail } from 'firebase/auth';
 import Footer from '../components/Footer';
 import LegalModal from '../components/LegalModal';
 import { Eye, EyeOff, CheckCircle, UserPlus } from 'lucide-react';
@@ -53,49 +52,49 @@ export default function Register() {
 
     setLoading(true);
     try {
-      const userCredential = await createUserWithEmailAndPassword(auth, formData.email, formData.password);
-      const user = userCredential.user;
+      // 1. Check if email exists (Optional, Firebase might block this by default but we try)
+      try {
+        const methods = await fetchSignInMethodsForEmail(auth, formData.email);
+        if (methods && methods.length > 0) {
+          setError('This email is already registered. Please login instead.');
+          toast.error('This email is already registered.');
+          setLoading(false);
+          return;
+        }
+      } catch (checkErr) {
+        // Ignored. If enumerate-email-api is disabled, it will throw an error, which is fine.
+        // We'll catch email-already-in-use during final account creation.
+      }
 
+      // 2. Generate OTP
       const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
-      const otpExpiresAt = new Date(Date.now() + 15 * 60 * 1000);
+      const otpExpiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
 
-
-
-      await setDoc(doc(db, "users", user.uid), {
-        firstName: formData.firstName,
-        lastName: formData.lastName,
-        phone: formData.phone,
-        email: formData.email,
-        isAdmin: false,
-        isEmailVerified: false,
-        otpCode: otpCode,
-        otpExpiresAt: otpExpiresAt,
-        createdAt: new Date()
-      });
-
+      // 3. Send OTP
       try {
         await sendRegistrationOTPEmail(formData.email, formData.firstName, otpCode);
         toast.success('OTP sent! Check your email inbox (and spam folder).');
       } catch (emailErr) {
         console.error("EmailJS error:", emailErr);
-        console.warn('OTP email failed to send — user can still verify manually.');
+        toast.error('Failed to send verification email. Please check your email address and try again.');
+        setLoading(false);
+        return; // Don't proceed if email fails
       }
 
-      setSuccessMessage('Account created successfully!');
+      // 4. Store pending registration data
+      sessionStorage.setItem('pendingRegistration', JSON.stringify(formData));
+      sessionStorage.setItem('registrationOTP', otpCode);
+      sessionStorage.setItem('otpExpiresAt', otpExpiresAt);
+
+      setSuccessMessage('Verification email sent!');
       navigate(`/verify-otp?email=${encodeURIComponent(formData.email)}`);
     } catch (err) {
-      console.error("Registration error full details:", err);
-      if (err.code === 'auth/email-already-in-use') {
-        setError('This email is already registered. Please login instead.');
-        toast.error('This email is already registered.');
-      } else if (err.code === 'auth/weak-password') {
-        setError('Password is too weak. Please use at least 6 characters.');
-        toast.error('Password is too weak.');
-      } else if (err.message && err.message.toLowerCase().includes('offline')) {
+      console.error("Registration error:", err);
+      if (err.message && err.message.toLowerCase().includes('offline')) {
         setError('Please check your internet connection and try again.');
         toast.error('Check your internet connection.');
       } else {
-        setError(`Failed to register: ${err.message}`);
+        setError(`An error occurred: ${err.message}`);
         toast.error(`Error: ${err.message}`);
       }
     } finally {

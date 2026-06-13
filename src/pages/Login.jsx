@@ -35,7 +35,6 @@ export default function Login() {
         }
 
         if (userData.isEmailVerified === false) {
-          await auth.signOut();
           toast('Please verify your email to continue.', { icon: '✉️' });
           navigate(`/verify-otp?email=${encodeURIComponent(email)}`);
           return;

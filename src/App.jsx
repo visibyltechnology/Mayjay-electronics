@@ -13,7 +13,7 @@ const Shop          = lazy(() => import('./pages/Shop'));
 const ProductDetail = lazy(() => import('./pages/ProductDetail'));
 const Login         = lazy(() => import('./pages/Login'));
 const Register      = lazy(() => import('./pages/Register'));
-const VerifyOTP     = lazy(() => import('./pages/VerifyOTP'));
+import VerifyOTP from './pages/VerifyOTP';
 const ForgotPassword= lazy(() => import('./pages/ForgotPassword'));
 const ResetPassword = lazy(() => import('./pages/ResetPassword'));
 const Profile       = lazy(() => import('./pages/Profile'));

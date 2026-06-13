@@ -8,8 +8,7 @@ import useCartStore from '../store/useCartStore';
 import useAuthStore from '../store/useAuthStore';
 import toast from 'react-hot-toast';
 import { collection, addDoc, onSnapshot, serverTimestamp, query, orderBy } from 'firebase/firestore';
-
-const INTEREST = { 2: 5, 3: 10, 4: 10, 5: 20, 6: 20 };
+import { INTEREST_RATES_PERCENT } from '../utils/interestRates';
 
 function fmt(n) {
   return '₦' + Math.ceil(n).toLocaleString('en-NG');
@@ -24,6 +23,7 @@ export default function ProductDetail() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
+  const [selectedImg, setSelectedImg] = useState('');
   const [showInstallment, setShowInstallment] = useState(false);
   const [installments, setInstallments] = useState(2);
   const [paymentFrequency, setPaymentFrequency] = useState('monthly');
@@ -41,7 +41,9 @@ export default function ProductDetail() {
         const docRef = doc(db, "products", id);
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
-          setProduct({ id: docSnap.id, ...docSnap.data() });
+          const data = docSnap.data();
+          setProduct({ id: docSnap.id, ...data });
+          setSelectedImg(data.img || data.images?.[0] || '');
         } else {
           setError("Product not found");
         }
@@ -94,14 +96,16 @@ export default function ProductDetail() {
   }
 
   const price = Number(product.price);
-  const monthlyRate = INTEREST[installments] / 100;
+  const monthlyRate = INTEREST_RATES_PERCENT[installments] / 100;
   const rate        = monthlyRate * (paymentFrequency === 'weekly' ? 0.5 : 1);
-  const displayRate = INTEREST[installments] * (paymentFrequency === 'weekly' ? 0.5 : 1);
+  const displayRate = INTEREST_RATES_PERCENT[installments] * (paymentFrequency === 'weekly' ? 0.5 : 1);
   const total       = price * (1 + rate);
   
   const totalPeriods = installments;
   const periodPayment = total / totalPeriods;
   const interestAmt = total - price;
+
+  const allImages = product.images && product.images.length > 0 ? product.images : [product.img].filter(Boolean);
 
   const handleBuyOnce = () => {
     addToCart(product, 1, 'full', 1, price);
@@ -160,13 +164,30 @@ export default function ProductDetail() {
           
           {/* Image Column */}
           <div className="w-full lg:w-1/2 flex-shrink-0 relative">
-            <div className="sticky top-8 bg-gradient-to-br from-brandDark to-brandBlack border border-gray-800 rounded-2xl p-8 flex items-center justify-center min-h-[400px] lg:min-h-[500px] shadow-2xl relative overflow-hidden group">
+            <div className="sticky top-8 bg-gradient-to-br from-brandDark to-brandBlack border border-gray-800 rounded-2xl p-8 flex flex-col items-center justify-center min-h-[400px] lg:min-h-[500px] shadow-2xl relative overflow-hidden group">
               <div className="absolute inset-0 opacity-10 bg-[url('https://images.unsplash.com/photo-1509391366360-2e959784a276?auto=format&fit=crop&w=1000&q=80')] mix-blend-overlay bg-cover bg-center transition-transform duration-700 group-hover:scale-105"></div>
-              <img src={product.img || product.images?.[0]} alt={product.name} loading="lazy" decoding="async" className="relative z-10 max-w-full max-h-[450px] object-contain drop-shadow-2xl group-hover:scale-110 transition-transform duration-500" />
-              {product.featured && (
-                <span className="absolute top-4 left-4 z-20 bg-brandLime text-brandBlack text-[10px] font-black px-3 py-1.5 rounded-full uppercase tracking-widest shadow-md">
-                  Featured
-                </span>
+              
+              <div className="flex-1 w-full flex items-center justify-center relative">
+                <img src={selectedImg || product.img || product.images?.[0]} alt={product.name} loading="lazy" decoding="async" className="relative z-10 max-w-full max-h-[350px] lg:max-h-[400px] object-contain drop-shadow-2xl group-hover:scale-105 transition-transform duration-500" />
+                {product.featured && (
+                  <span className="absolute top-0 left-0 z-20 bg-brandLime text-brandBlack text-[10px] font-black px-3 py-1.5 rounded-full uppercase tracking-widest shadow-md">
+                    Featured
+                  </span>
+                )}
+              </div>
+
+              {allImages.length > 1 && (
+                <div className="flex gap-3 mt-6 relative z-20 overflow-x-auto max-w-full pb-2 scrollbar-hide items-center justify-center">
+                  {allImages.map((img, idx) => (
+                    <button 
+                      key={idx}
+                      onClick={() => setSelectedImg(img)}
+                      className={`w-16 h-16 rounded-xl flex-shrink-0 border-2 overflow-hidden transition-all ${selectedImg === img ? 'border-brandLime scale-110 shadow-[0_0_15px_rgba(232,251,29,0.3)]' : 'border-gray-700 opacity-60 hover:opacity-100 hover:border-gray-500'}`}
+                    >
+                      <img src={img} alt={`${product.name} ${idx + 1}`} className="w-full h-full object-cover bg-white" />
+                    </button>
+                  ))}
+                </div>
               )}
             </div>
           </div>
@@ -276,7 +297,7 @@ export default function ProductDetail() {
                       <span className="text-xs font-bold uppercase tracking-widest text-gray-400">Interest rate</span>
                       <span className={`text-xs font-black uppercase tracking-widest ${displayRate > 0 ? 'text-white' : 'text-brandLime'}`}>
                         {displayRate}% {displayRate === 0 && '🎉'}
-                        {paymentFrequency === 'weekly' && INTEREST[installments] > 0 && (
+                        {paymentFrequency === 'weekly' && INTEREST_RATES_PERCENT[installments] > 0 && (
                           <span className="ml-1 text-brandLime font-bold text-[10px]">(½ of monthly)</span>
                         )}
                       </span>

@@ -17,7 +17,7 @@
  *   TEMPLATE_ORDER_DELIVERED  template_order_delivered (delivered confirmation)
  *
  * Variables your templates can use:
- *   {{to_email}}        recipient email address
+ *   {{email}}        recipient email address
  *   {{name}}            customer first name
  *   {{order_id}}        short order ID
  *   {{items_summary}}   pre-formatted bullet list of all items in the order
@@ -36,26 +36,27 @@ import { db } from '../firebase';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-// Default EmailJS credentials (used for OTPs)
-const DEFAULT_SERVICE_ID = 'service_i3z9bcn';
-const DEFAULT_PUBLIC_KEY = 'ow1HqhoLp_AmYw9qO';
+// All EmailJS credentials
+const SERVICE_ID = 'service_4qwypyf';
+const PUBLIC_KEY = 'CWdxDP7npAJ5fJzA1';
 
-// Gmail Service credentials (used for specific order templates)
-const GMAIL_SERVICE_ID = 'service_i3z9bcn';
-const GMAIL_PUBLIC_KEY = 'ow1HqhoLp_AmYw9qO';
+// Keep aliases so nothing else needs changing
+const DEFAULT_SERVICE_ID = SERVICE_ID;
+const DEFAULT_PUBLIC_KEY = PUBLIC_KEY;
+const GMAIL_SERVICE_ID = SERVICE_ID;
+const GMAIL_PUBLIC_KEY = PUBLIC_KEY;
 
-// Gmail API credentials (used for registration OTP)
+// Gmail API credentials — used specifically for registration OTP
 const GMAIL_REG_SERVICE_ID = 'service_go3mq9r';
 const GMAIL_REG_PUBLIC_KEY = 'qMDC3k6-nsYEMhgJP';
 
-// Delivery OTP credentials
-const DELIVERY_SERVICE_ID = 'service_i3z9bcn';
-const DELIVERY_PUBLIC_KEY = 'ow1HqhoLp_AmYw9qO';
+const DELIVERY_SERVICE_ID = SERVICE_ID;
+const DELIVERY_PUBLIC_KEY = PUBLIC_KEY;
 
 export const TEMPLATES = {
-  OTP:             'template_g5muxfu',        // registration OTP
-  RESET_PASSWORD:  'template_ekfiipq',        // forgot password OTP
-  ORDER_OTP:       'template_order_otp',      // delivery confirmation code
+  OTP:             'template_g5muxfu',       // registration OTP
+  RESET_PASSWORD:  'template_o17qzmm',       // forgot-password OTP
+  ORDER_OTP:       'template_order_otp',     // delivery confirmation code
   TRACKING_UPDATE: 'template_tracking_update', // shipped / status changed
   ORDER_DELIVERED: 'template_order_delivered', // delivered confirmation
 };
@@ -115,19 +116,19 @@ function _buildItemsSummaryText(items = []) {
   if (!items.length) return 'No items found.';
 
   return items.map(item => {
-    const qty    = item.quantity || 1;
-    const name   = item.name || 'Product';
+    const qty = item.quantity || 1;
+    const name = item.name || 'Product';
 
     let pricePart;
     if (item.paymentChoice === 'installment') {
-      const periodAmt  = item.periodPayment || item.monthlyPayment || 0;
-      const periods    = item.installments  || 0;
-      const freq       = item.paymentFrequency === 'weekly' ? 'wk' : 'mo';
-      const totalPds   = item.paymentFrequency === 'weekly' ? periods * 4 : periods;
-      const formatted  = '₦' + Math.ceil(periodAmt * qty).toLocaleString('en-NG');
+      const periodAmt = item.periodPayment || item.monthlyPayment || 0;
+      const periods = item.installments || 0;
+      const freq = item.paymentFrequency === 'weekly' ? 'wk' : 'mo';
+      const totalPds = item.paymentFrequency === 'weekly' ? periods * 4 : periods;
+      const formatted = '₦' + Math.ceil(periodAmt * qty).toLocaleString('en-NG');
       pricePart = `${formatted}/${freq} × ${totalPds} ${freq === 'wk' ? 'weeks' : 'months'}`;
     } else {
-      const total   = (item.price || 0) * qty;
+      const total = (item.price || 0) * qty;
       const formatted = '₦' + Math.ceil(total).toLocaleString('en-NG');
       pricePart = `${formatted} (Full Payment)`;
     }
@@ -144,21 +145,21 @@ function _buildItemsSummaryHtml(items = []) {
   if (!items.length) return '<p>No items found.</p>';
 
   const rows = items.map(item => {
-    const qty    = item.quantity || 1;
-    const name   = item.name || 'Product';
-    const image  = item.img || item.image || 'https://via.placeholder.com/80';
+    const qty = item.quantity || 1;
+    const name = item.name || 'Product';
+    const image = item.img || item.image || 'https://via.placeholder.com/80';
     const condition = item.condition || 'New';
 
     let pricePart;
     if (item.paymentChoice === 'installment') {
-      const periodAmt  = item.periodPayment || item.monthlyPayment || 0;
-      const periods    = item.installments  || 0;
-      const freq       = item.paymentFrequency === 'weekly' ? 'wk' : 'mo';
-      const totalPds   = item.paymentFrequency === 'weekly' ? periods * 4 : periods;
-      const formatted  = '₦' + Math.ceil(periodAmt * qty).toLocaleString('en-NG');
+      const periodAmt = item.periodPayment || item.monthlyPayment || 0;
+      const periods = item.installments || 0;
+      const freq = item.paymentFrequency === 'weekly' ? 'wk' : 'mo';
+      const totalPds = item.paymentFrequency === 'weekly' ? periods * 4 : periods;
+      const formatted = '₦' + Math.ceil(periodAmt * qty).toLocaleString('en-NG');
       pricePart = `${formatted}/${freq} × ${totalPds} ${freq === 'wk' ? 'weeks' : 'months'}`;
     } else {
-      const total   = (item.price || 0) * qty;
+      const total = (item.price || 0) * qty;
       const formatted = '₦' + Math.ceil(total).toLocaleString('en-NG');
       pricePart = `${formatted} (Full Payment)`;
     }
@@ -200,11 +201,10 @@ export async function sendRegistrationOTPEmail(toEmail, name, otpCode) {
   return _send(
     TEMPLATES.OTP,
     {
-      to_email: toEmail,
-      email:    toEmail,
+      email: toEmail,
       name,
-      otp:      otpCode,
-      code:     otpCode,
+      otp: otpCode,
+      code: otpCode,
     },
     GMAIL_REG_SERVICE_ID,
     GMAIL_REG_PUBLIC_KEY
@@ -217,11 +217,10 @@ export async function sendRegistrationOTPEmail(toEmail, name, otpCode) {
  */
 export async function sendForgotPasswordOTPEmail(toEmail, name, otpCode) {
   return _send(TEMPLATES.RESET_PASSWORD, {
-    to_email: toEmail,
-    email:    toEmail,
+    email: toEmail,
     name,
-    otp:      otpCode,
-    code:     otpCode,
+    otp: otpCode,
+    code: otpCode,
   });
 }
 
@@ -242,29 +241,28 @@ export async function sendOrderOTPEmail(userId, orderId, otpCode) {
   if (!email) return false;
 
   // Fetch order to get items + delivery address
-  const orderData     = await _getOrderData(orderId);
-  const items         = orderData?.items || [];
+  const orderData = await _getOrderData(orderId);
+  const items = orderData?.items || [];
   const itemsSummaryHtml = _buildItemsSummaryHtml(items);
   const itemsSummaryText = _buildItemsSummaryText(items);
-  const itemCount     = items.reduce((acc, i) => acc + (i.quantity || 1), 0);
-  const deliveryAddr  = orderData?.deliveryInfo
+  const itemCount = items.reduce((acc, i) => acc + (i.quantity || 1), 0);
+  const deliveryAddr = orderData?.deliveryInfo
     ? `${orderData.deliveryInfo.address || ''}, ${orderData.deliveryInfo.city || ''}, ${orderData.deliveryInfo.state || ''}`.replace(/^,\s*|,\s*$/g, '')
     : '';
 
   const sent = await _send(
     TEMPLATES.ORDER_OTP,
     {
-      to_email:         email,
       email,
       name,
-      order_id:         orderId,
-      delivery_code:    otpCode,
-      otp:              otpCode,
-      code:             otpCode,
-      items_summary:    itemsSummaryHtml,
-      item_count:       itemCount,
+      order_id: orderId,
+      delivery_code: otpCode,
+      otp: otpCode,
+      code: otpCode,
+      items_summary: itemsSummaryHtml,
+      item_count: itemCount,
       delivery_address: deliveryAddr,
-      message:          `Your order is out for delivery. When the courier arrives, give them this code: ${otpCode}`,
+      message: `Your order is out for delivery. When the courier arrives, give them this code: ${otpCode}`,
     },
     DELIVERY_SERVICE_ID,
     DELIVERY_PUBLIC_KEY
@@ -273,10 +271,9 @@ export async function sendOrderOTPEmail(userId, orderId, otpCode) {
   // Fallback to the OTP template (supports {{otp}} / {{code}}) if dedicated template fails
   if (!sent) {
     return _send(TEMPLATES.OTP, {
-      to_email: email,
       email,
       name,
-      otp:  otpCode,
+      otp: otpCode,
       code: otpCode,
       message: `🚚 Delivery code for order #${orderId}: ${otpCode}\n\nItems:\n${itemsSummaryText}`,
     });
@@ -308,22 +305,22 @@ export async function sendTrackingUpdateEmail(userId, orderId, status, notes = '
     : TEMPLATES.TRACKING_UPDATE;
 
   const STATUS_LABELS = {
-    Pending:    'Order Placed',
-    Paid:       'Payment Confirmed',
+    Pending: 'Order Placed',
+    Paid: 'Payment Confirmed',
     Processing: 'Being Processed',
-    Shipped:    'Package Shipped',
-    Delivered:  'Delivered',
-    Cancelled:  'Cancelled',
-    Returned:   'Returned',
+    Shipped: 'Package Shipped',
+    Delivered: 'Delivered',
+    Cancelled: 'Cancelled',
+    Returned: 'Returned',
   };
   const statusLabel = STATUS_LABELS[status] || status;
 
   // Fetch order to build items summary
-  const orderData    = await _getOrderData(orderId);
-  const items        = orderData?.items || [];
+  const orderData = await _getOrderData(orderId);
+  const items = orderData?.items || [];
   const itemsSummaryHtml = _buildItemsSummaryHtml(items);
   const itemsSummaryText = _buildItemsSummaryText(items);
-  const itemCount    = items.reduce((acc, i) => acc + (i.quantity || 1), 0);
+  const itemCount = items.reduce((acc, i) => acc + (i.quantity || 1), 0);
   const deliveryAddr = orderData?.deliveryInfo
     ? `${orderData.deliveryInfo.address || ''}, ${orderData.deliveryInfo.city || ''}, ${orderData.deliveryInfo.state || ''}`.replace(/^,\s*|,\s*$/g, '')
     : '';
@@ -331,20 +328,19 @@ export async function sendTrackingUpdateEmail(userId, orderId, status, notes = '
   const sent = await _send(
     templateId,
     {
-      to_email:           email,
       email,
       name,
-      order_id:           orderId,
-      tracking_status:    status,
-      status_label:       statusLabel,
-      notes:              notes || `Your order status has been updated to: ${statusLabel}`,
-      items_summary:      itemsSummaryHtml,
-      item_count:         itemCount,
-      delivery_address:   deliveryAddr,
+      order_id: orderId,
+      tracking_status: status,
+      status_label: statusLabel,
+      notes: notes || `Your order status has been updated to: ${statusLabel}`,
+      items_summary: itemsSummaryHtml,
+      item_count: itemCount,
+      delivery_address: deliveryAddr,
       estimated_delivery: status === 'Shipped' ? 'Within 1–3 business days' : '',
-      tracking_url:       `${window.location.origin}/profile`,
-      store_url:          `${window.location.origin}/products`,
-      message:            notes || `Your order status has been updated to: ${statusLabel}`,
+      tracking_url: `${window.location.origin}/profile`,
+      store_url: `${window.location.origin}/products`,
+      message: notes || `Your order status has been updated to: ${statusLabel}`,
     },
     GMAIL_SERVICE_ID,
     GMAIL_PUBLIC_KEY
@@ -352,10 +348,9 @@ export async function sendTrackingUpdateEmail(userId, orderId, status, notes = '
 
   if (!sent) {
     return _send(TEMPLATES.OTP, {
-      to_email: email,
       email,
       name,
-      otp:  '',
+      otp: '',
       code: '',
       message: `📦 Order #${orderId} — ${statusLabel}${notes ? '\n' + notes : ''}\n\nItems:\n${itemsSummaryText}`,
     });
@@ -375,12 +370,11 @@ export async function sendOrderDeliveredEmail(userId, orderId) {
  */
 export async function sendPasswordResetSuccessEmail(toEmail, name) {
   return _send(TEMPLATES.OTP, {
-    to_email: toEmail,
-    email:    toEmail,
+    email: toEmail,
     name,
-    otp:      '',
-    code:     '',
-    message:  'Your password has been successfully reset. If you did not make this change, please contact support immediately.',
+    otp: '',
+    code: '',
+    message: 'Your password has been successfully reset. If you did not make this change, please contact support immediately.',
   });
 }
 

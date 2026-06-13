@@ -357,7 +357,7 @@ export default function Shop() {
                     </div>
 
                     {loading ? (
-                        <div className="grid grid-cols-3 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 sm:gap-6 lg:gap-8">
+                        <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 sm:gap-6 lg:gap-8">
                             {[1, 2, 3, 4, 5, 6].map(i => (
                                 <div key={i} className="bg-white p-4 rounded-xl shadow-md border border-gray-100 h-96 animate-pulse flex flex-col justify-between">
                                     <div className="w-full h-56 bg-gray-100 rounded-lg mb-4"></div>
@@ -386,22 +386,23 @@ export default function Shop() {
                             </button>
                         </div>
                     ) : (
-                        <div className="grid grid-cols-3 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 sm:gap-6 lg:gap-8">
+                        <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 sm:gap-6 lg:gap-8">
                             {currentItems.map((p, idx) => {
                                 const inStock = isProductInStock(p);
                                 return (
                                 <div key={p.id} onClick={() => navigate(`/products/${p.id}`)} className="bg-white rounded-2xl shadow-sm hover:shadow-2xl hover:-translate-y-1 transition-all duration-500 border border-gray-100 flex flex-col group relative overflow-hidden cursor-pointer animate-fade-in-up" style={{ animationDelay: `${idx * 50}ms` }}>
-                                    <div className="absolute top-4 left-4 z-30 flex flex-col gap-2 items-start">
-                                        <span className="bg-slate-900/90 backdrop-blur text-white text-[10px] font-bold px-2.5 py-1 rounded-md tracking-wider uppercase">
+                                    <div className="absolute top-2 left-2 sm:top-4 sm:left-4 z-30 flex flex-col gap-1 sm:gap-2 items-start">
+                                        <span className="bg-slate-900/90 backdrop-blur text-white text-[8px] sm:text-[10px] font-bold px-1.5 py-0.5 sm:px-2.5 sm:py-1 rounded sm:rounded-md tracking-wider uppercase max-w-[60px] sm:max-w-none truncate">
                                             {p.category ? p.category.split(' ')[0] : 'SOLAR'}
                                         </span>
                                         {p.featured && (
-                                            <span className="bg-yellow-400 text-slate-900 text-[10px] font-black px-2.5 py-1 rounded-md uppercase tracking-wider shadow-sm flex items-center gap-1">
-                                                <i className="fas fa-star text-[8px]"></i> Featured
+                                            <span className="bg-yellow-400 text-slate-900 text-[8px] sm:text-[10px] font-black px-1.5 py-0.5 sm:px-2.5 sm:py-1 rounded sm:rounded-md uppercase tracking-wider shadow-sm flex items-center gap-0.5 sm:gap-1">
+                                                <i className="fas fa-star text-[7px] sm:text-[8px]"></i>
+                                                <span className="hidden sm:inline">Featured</span>
                                             </span>
                                         )}
                                         {p.tag && (
-                                            <span className="bg-brandLime text-brandDark text-[10px] font-black px-2.5 py-1 rounded-md uppercase tracking-wider shadow-sm">
+                                            <span className="bg-brandLime text-brandDark text-[8px] sm:text-[10px] font-black px-1.5 py-0.5 sm:px-2.5 sm:py-1 rounded sm:rounded-md uppercase tracking-wider shadow-sm max-w-[60px] sm:max-w-none truncate">
                                                 {p.tag}
                                             </span>
                                         )}

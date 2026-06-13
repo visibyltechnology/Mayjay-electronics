@@ -82,7 +82,6 @@ export default function Register() {
       }
 
       setSuccessMessage('Account created successfully!');
-      await auth.signOut();
       navigate(`/verify-otp?email=${encodeURIComponent(formData.email)}`);
     } catch (err) {
       console.error("Registration error full details:", err);

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useSearchParams, useNavigate, Link } from 'react-router-dom';
 import { collection, query, where, getDocs, updateDoc, doc, addDoc } from 'firebase/firestore';
 import { db } from '../firebase';
@@ -17,8 +17,33 @@ export default function VerifyOTP() {
   const [error, setError] = useState('');
   const [resending, setResending] = useState(false);
   const [isPageLoading, setIsPageLoading] = useState(true);
-
   const [timeLeft, setTimeLeft] = useState(null);
+
+  // Use a ref so the interval handle is always current in closures
+  const intervalRef = useRef(null);
+
+  const stopTimer = useCallback(() => {
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+  }, []);
+
+  /** Start a countdown to a fixed expiry timestamp (ms). */
+  const startTimer = useCallback((expiresAtMs) => {
+    stopTimer();
+    const tick = () => {
+      const diff = expiresAtMs - Date.now();
+      if (diff <= 0) {
+        setTimeLeft(0);
+        stopTimer();
+      } else {
+        setTimeLeft(Math.floor(diff / 1000));
+      }
+    };
+    tick(); // run immediately so there's no 1-second blank
+    intervalRef.current = setInterval(tick, 1000);
+  }, [stopTimer]);
 
   useEffect(() => {
     if (!email) {
@@ -26,58 +51,46 @@ export default function VerifyOTP() {
       return;
     }
 
-    let interval;
     const initTimer = async () => {
       setIsPageLoading(true);
       try {
         const q = query(collection(db, 'users'), where('email', '==', email));
         const snap = await getDocs(q);
-        
+
         if (snap.empty) {
           toast.error('User not found.');
           navigate('/login');
           return;
         }
-        
+
         const userData = snap.docs[0].data();
-        
+
         if (userData.isEmailVerified) {
           toast.success('Email is already verified.');
-          navigate('/login');
+          navigate('/shop');
           return;
         }
 
         if (userData.otpExpiresAt) {
-          const expiresAt = userData.otpExpiresAt.toDate().getTime();
-          const updateTimer = () => {
-            const now = Date.now();
-            const diff = expiresAt - now;
-            if (diff > 0) {
-              setTimeLeft(Math.floor(diff / 1000));
-            } else {
-              setTimeLeft(0);
-              clearInterval(interval);
-            }
-          };
-          updateTimer();
-          interval = setInterval(updateTimer, 1000);
+          // Firestore Timestamps have .toDate(); plain Dates do not
+          const expiresAt = typeof userData.otpExpiresAt.toDate === 'function'
+            ? userData.otpExpiresAt.toDate().getTime()
+            : new Date(userData.otpExpiresAt).getTime();
+          startTimer(expiresAt);
         } else {
           setTimeLeft(0);
         }
       } catch (err) {
-        console.error("Failed to fetch user data:", err);
-        setError("Failed to load user details.");
+        console.error('Failed to fetch user data:', err);
+        setError('Failed to load user details.');
       } finally {
         setIsPageLoading(false);
       }
     };
 
     initTimer();
-
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, [email, navigate]);
+    return stopTimer; // cleanup clears the interval on unmount
+  }, [email, navigate, startTimer, stopTimer]);
 
   const formatTime = (seconds) => {
     if (seconds === null) return '--:--';
@@ -188,7 +201,7 @@ export default function VerifyOTP() {
       });
 
       toast.success('Email successfully verified!');
-      navigate('/login');
+      navigate('/shop');
 
     } catch (err) {
       console.error(err);
@@ -219,7 +232,7 @@ export default function VerifyOTP() {
 
       if (currentData.isEmailVerified) {
         toast.success('Email is already verified.');
-        navigate('/login');
+        navigate('/shop');
         return;
       }
 
@@ -268,7 +281,7 @@ export default function VerifyOTP() {
       }
 
       setOtp(['', '', '', '', '', '']);
-      setTimeLeft(15 * 60);
+      startTimer(newExpiresAt.getTime()); // restart the live countdown
       setError('');
     } catch (err) {
       console.error(err);

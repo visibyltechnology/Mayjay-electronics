@@ -7,6 +7,7 @@ import Footer from '../components/Footer';
 import { Package, Clock, CheckCircle, ShoppingBag, Search, ChevronDown, ChevronUp, SlidersHorizontal } from 'lucide-react';
 import toast from 'react-hot-toast';
 import OrderTrackingStepper from '../components/OrderTrackingStepper';
+import { INTEREST_RATES_DECIMAL } from '../utils/interestRates';
 
 function fmt(n) {
   return '₦' + Math.ceil(n).toLocaleString('en-NG');
@@ -16,7 +17,9 @@ function PaymentBadge({ paymentChoice, installments, paymentFrequency }) {
   const isInstallment = paymentChoice === 'installment';
   return (
     <span className={`inline-block text-[10px] font-black px-2 py-1 rounded-sm uppercase tracking-wider ${isInstallment ? 'bg-blue-50 text-blue-700 border border-blue-200' : 'bg-green-50 text-green-700 border border-green-200'}`}>
-      {isInstallment ? `${paymentFrequency === 'weekly' ? installments * 4 + ' Wkly' : installments + ' Mthly'}` : 'Full Payment'}
+      {isInstallment
+        ? `${installments} ${paymentFrequency === 'weekly' ? 'Wkly' : 'Mthly'}`
+        : 'Full Payment'}
     </span>
   );
 }
@@ -79,12 +82,22 @@ export default function Profile() {
       return;
     }
 
-    if (window.paymentProcessed) return;
-    window.paymentProcessed = true;
-    
-    if (typeof amountToPay !== 'number' || isNaN(amountToPay)) {
+    if (typeof amountToPay !== 'number' || isNaN(amountToPay) || amountToPay <= 0) {
        toast.error("Invalid payment amount.");
-       window.paymentProcessed = false;
+       return;
+    }
+
+    const balance = order.totalAmount - (order.amountPaid || 0);
+    if (amountToPay > balance) {
+       toast.error("Cannot pay more than the remaining balance.");
+       return;
+    }
+    if (balance - amountToPay < 1000 && balance - amountToPay > 0) {
+       toast.error("You cannot leave a balance below ₦1,000. Please pay the full remaining balance.");
+       return;
+    }
+    if (amountToPay < 1000 && balance >= 1000) {
+       toast.error("Minimum payment amount is ₦1,000.");
        return;
     }
 
@@ -112,7 +125,6 @@ export default function Profile() {
               if (!verifyRes.ok || !verifyData.verified) {
                 toast.error('Payment verification failed.');
                 setLoading(false);
-                window.paymentProcessed = false;
                 return;
               }
             } catch (verifyErr) {
@@ -137,13 +149,7 @@ export default function Profile() {
                  if (amountToPay > balance && balance > 0) {
                     throw new Error("Cannot pay more than the remaining balance");
                  }
-                 
-                 let finalAmount = amountToPay;
-                 if (finalAmount < 1000 && finalAmount > 0) {
-                    finalAmount = 1000;
-                 }
-                 
-                 const newAmountPaid = currentOrder.amountPaid + finalAmount;
+                 const newAmountPaid = currentOrder.amountPaid + amountToPay;
                  const newStatus = (newAmountPaid >= currentOrder.totalAmount) ? 'Completed' : 'Processing (Installments)';
                  
                  transaction.update(orderRef, {
@@ -154,7 +160,7 @@ export default function Profile() {
                  return {
                     amountPaid: newAmountPaid,
                     status: newStatus,
-                    finalAmount
+                    finalAmount: amountToPay
                  };
               });
               
@@ -181,25 +187,21 @@ export default function Profile() {
               toast.error(err.message || "Payment successful but failed to update order record.");
             } finally {
               setLoading(false);
-              window.paymentProcessed = false;
             }
         },
         onClose: function() {
             setLoading(false);
-            if (!window.paymentProcessed) toast.error("Payment was cancelled.");
-            window.paymentProcessed = false;
+            toast.error("Payment was cancelled.");
         },
         onFailed: function(response) {
             setLoading(false);
             toast.error(response?.data?.message || "Payment failed. Please try again.");
-            window.paymentProcessed = false;
         }
       });
     } catch (err) {
       console.error("Error initializing payment:", err);
       toast.error("Failed to initialize payment gateway.");
       setLoading(false);
-      window.paymentProcessed = false;
     }
   };
 
@@ -380,13 +382,15 @@ export default function Profile() {
                       const pct = Math.min(100, Math.round((order.amountPaid / order.totalAmount) * 100));
                       const isComplete = order.amountPaid >= order.totalAmount;
                       
-                      const combinedPeriodPayment = order.items?.reduce((acc, i) => acc + (i.paymentChoice === 'installment' ? (i.periodPayment || i.monthlyPayment) * i.quantity : 0), 0) || 0;
+                      const combinedPeriodPayment = order.items?.reduce((acc, i) => acc + (i.paymentChoice === 'installment' ? (i.periodPayment || i.monthlyPayment || 0) * i.quantity : 0), 0) || 0;
                       const isWeekly = order.items?.some(i => i.paymentFrequency === 'weekly');
-                      const maxPeriods = Math.max(...(order.items?.map(i => i.paymentChoice === 'installment' ? (isWeekly ? i.installments * 4 : i.installments) : 0) || [0]));
+                      const maxPeriods = Math.max(...(order.items?.map(i =>
+                        i.paymentChoice === 'installment' ? i.installments : 0
+                      ) || [0]));
                       
                       // Calculate how much of the paid amount was for installments vs full payments
                       const totalFullPayments = order.items?.reduce((acc, i) => acc + (i.paymentChoice === 'full' ? i.price * i.quantity : 0), 0) || 0;
-                      const amountPaidTowardsInstallments = Math.max(0, order.amountPaid - totalFullPayments);
+                      const amountPaidTowardsInstallments = Math.max(0, order.amountPaid - totalFullPayments - (order.deliveryFee || 0));
 
                       const periodsPaid = combinedPeriodPayment > 0 ? Math.floor(amountPaidTowardsInstallments / combinedPeriodPayment) : 0;
                       const excessPaid = combinedPeriodPayment > 0 ? (amountPaidTowardsInstallments % combinedPeriodPayment) : 0;
@@ -563,7 +567,7 @@ export default function Profile() {
                                             onChange={(e) => setCustomAmounts(prev => ({ ...prev, [order.id]: Number(e.target.value) }))}
                                             max={balance}
                                             min={1}
-                                            className="bg-white border border-gray-300 rounded-lg text-sm font-bold focus:border-brandLime outline-none transition-colors"
+                                            className="w-full pl-7 pr-3 py-2.5 bg-white border border-gray-300 rounded-lg text-sm font-bold focus:border-brandLime outline-none transition-colors"
                                           />
                                         </div>
                                         <button

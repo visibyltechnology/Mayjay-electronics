@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import toast from 'react-hot-toast';
+import { INTEREST_RATES_DECIMAL } from '../utils/interestRates';
 
 const useCartStore = create(
   persist(
@@ -67,8 +68,7 @@ const useCartStore = create(
           items: state.items.map((item) => {
             if (item.paymentChoice !== 'installment') return item;
             if (item.paymentFrequency === newFrequency) return item;
-            const INTEREST = { 2: 0.05, 3: 0.1, 4: 0.1, 5: 0.2, 6: 0.2 };
-            const baseRate = INTEREST[item.installments] ?? 0.2;
+            const baseRate = INTEREST_RATES_DECIMAL[item.installments] ?? 0.2;
             const rate = baseRate * (newFrequency === 'weekly' ? 0.5 : 1);
             const fullAmount = item.price * (1 + rate);
             const newPeriodPayment = fullAmount / item.installments;
@@ -79,12 +79,11 @@ const useCartStore = create(
       },
 
       getCartTotal: () => {
-        const INTEREST = { 2: 5, 3: 10, 4: 10, 5: 20, 6: 20 };
         return get().items.reduce((total, item) => {
           if (item.paymentChoice === 'full') {
             return total + (item.price * item.quantity);
           }
-          const baseRate = (INTEREST[item.installments] || 0) / 100;
+          const baseRate = INTEREST_RATES_DECIMAL[item.installments] || 0;
           const rate = baseRate * (item.paymentFrequency === 'weekly' ? 0.5 : 1);
           return total + (item.price * (1 + rate) * item.quantity);
         }, 0);

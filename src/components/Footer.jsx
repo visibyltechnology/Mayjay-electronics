@@ -11,22 +11,22 @@ export default function Footer() {
         ph: {
             label: 'Port Harcourt',
             address: 'Rumuola Road, off Trans-Amadi Industrial Layout, Port Harcourt, Rivers State',
-            phone: '+234 806 891 6694',
-            whatsapp: 'https://wa.me/2348068916694?text=Hi%20Mayjay%20Concepts%20PH%2C%20I%20want%20to%20enquire%20about%20a%20product.',
+            phone: '+234 706 651 4355',
+            whatsapp: 'https://wa.me/2347066514355?text=Hi%20Mayjay%20Concepts%20PH%2C%20I%20want%20to%20enquire%20about%20a%20product.',
             hours: 'Mon–Sat: 8am – 7pm'
         },
         lagos: {
             label: 'Lagos',
             address: 'Computer Village, Ikeja, Lagos State (by appointment)',
-            phone: '+234 806 891 6694',
-            whatsapp: 'https://wa.me/2348068916694?text=Hi%20Mayjay%20Concepts%20Lagos%2C%20I%20want%20to%20place%20an%20order.',
+            phone: '+234 706 651 4355',
+            whatsapp: 'https://wa.me/2347066514355?text=Hi%20Mayjay%20Concepts%20Lagos%2C%20I%20want%20to%20place%20an%20order.',
             hours: 'Mon–Fri: 9am – 6pm'
         },
         abuja: {
             label: 'Abuja',
             address: 'Wuse 2, Central Business District, Abuja, FCT (by appointment)',
-            phone: '+234 806 891 6694',
-            whatsapp: 'https://wa.me/2348068916694?text=Hi%20Mayjay%20Concepts%20Abuja%2C%20I%20need%20appliances.',
+            phone: '+234 706 651 4355',
+            whatsapp: 'https://wa.me/2347066514355?text=Hi%20Mayjay%20Concepts%20Abuja%2C%20I%20need%20appliances.',
             hours: 'Mon–Fri: 9am – 6pm'
         }
     };
@@ -161,7 +161,7 @@ export default function Footer() {
                             {[
                                 { label: 'Terms & Services', to: '/terms' },
                                 { label: 'Privacy Policy', to: '/privacy' },
-                                { label: 'Returns & Exchanges', href: 'https://wa.me/2348068916694?text=Returns' },
+                                { label: 'Returns & Exchanges', href: 'https://wa.me/2347066514355?text=Returns' },
                                 { label: 'Secure Ordering', to: '/products' },
                             ].map((l, idx) => (
                                 <li key={idx}>

@@ -35,10 +35,10 @@ export default function AdminLayout() {
   ];
 
   return (
-    <div className="min-h-screen flex flex-col md:flex-row bg-gray-50 font-sans">
+    <div className="min-h-screen flex flex-col md:flex-row bg-gray-50 font-sans overflow-x-hidden">
       
       {/* Mobile Header Toggle */}
-      <div className="md:hidden bg-brandBlack text-white p-4 flex justify-between items-center z-20 shadow-md border-b border-brandLime/20">
+      <div className="md:hidden bg-brandBlack text-white p-4 flex justify-between items-center z-20 shadow-md border-b border-brandLime/20 shrink-0">
         <div>
           <h2 className="font-black text-lg uppercase tracking-widest text-white">
             MAYJAY <span className="text-brandLime">ADMIN</span>
@@ -51,9 +51,9 @@ export default function AdminLayout() {
 
       {/* Sidebar */}
       <aside className={`
-        fixed md:sticky top-0 left-0 h-screen md:h-auto z-10 w-64 bg-brandBlack border-r border-gray-800 shadow-xl md:shadow-none
+        fixed md:sticky top-0 left-0 h-[100dvh] md:h-screen z-30 w-64 bg-brandBlack border-r border-gray-800 shadow-xl md:shadow-none
         transform ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 transition-transform duration-300 ease-in-out
-        flex flex-col
+        flex flex-col flex-shrink-0
       `}>
         <div className="p-6 hidden md:block border-b border-gray-800">
           <h2 className="font-black text-2xl uppercase tracking-widest text-white mb-1">
@@ -101,13 +101,13 @@ export default function AdminLayout() {
       {/* Overlay for mobile menu */}
       {mobileMenuOpen && (
         <div 
-          className="fixed inset-0 bg-black/50 z-0 md:hidden backdrop-blur-sm"
+          className="fixed inset-0 bg-black/50 z-20 md:hidden backdrop-blur-sm"
           onClick={() => setMobileMenuOpen(false)}
         ></div>
       )}
 
       {/* Main Content */}
-      <main className="flex-1 w-full max-w-full md:max-w-[calc(100vw-16rem)] p-4 md:p-8 overflow-y-auto">
+      <main className="flex-1 min-w-0 w-full max-w-full p-4 md:p-8 overflow-y-auto overflow-x-hidden">
         <Outlet />
       </main>
     </div>
